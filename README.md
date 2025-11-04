@@ -1,4 +1,4 @@
-# 💼 Freelancer Management Software (ProgettoSoftwareGestionale)
+# 💼 Freelancer Management Software
 
 > 🐍 **Software Engineering Exam Project**
 > **Author: Sacco Emanuele**
