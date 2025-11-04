@@ -1,0 +1,6 @@
+/backend/__pycache__/
+/frontend/__pycache__/
+/PROGETTI_FILES
+/DOCUMENTI_PDF
+*.pkl*
+*.png

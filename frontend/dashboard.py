@@ -5,19 +5,20 @@ from tkinter import filedialog
 import os
 
 # Import backend logic
-from backend import dashboard as db_cruscotto
+from backend import dashboard as db_dashboard  # Importa il backend corretto
 from backend import address_book as db_rubrica
 from backend import projects as db_progetti
 
 # Import the base class using a relative import
 from .page_base import PageBase
 
-class PaginaCruscotto(PageBase):
+class PaginaDashboard(PageBase): # --- CLASSE RINOMINATA ---
     """
     The main Dashboard page.
     
     This page displays a summary of all key metrics and provides
     a button to export the comprehensive annual report.
+    (Refactored for better aesthetics)
     """
     def __init__(self, master):
         """
@@ -29,21 +30,24 @@ class PaginaCruscotto(PageBase):
         super().__init__(master, fg_color="transparent")
 
         # --- Layout ---
-        # The page is divided into a 2x2 grid for the summary cards
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure((0, 1), weight=1) 
+        self.grid_rowconfigure(2, weight=0)      
+        self.grid_columnconfigure((0, 1), weight=1) 
         
         # --- Widgets ---
         
-        # 1. Earnings Statistics Card (Top-Left)
-        self.frame_guadagni = ctk.CTkFrame(self)
-        self.frame_guadagni.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
+        # --- KPI Row (Row 0) ---
+        frame_kpi_row = ctk.CTkFrame(self, fg_color="transparent")
+        frame_kpi_row.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=10, pady=(10, 5))
+        frame_kpi_row.grid_columnconfigure((0, 1), weight=1)
+        
+        # 1. Earnings Statistics Card
+        self.frame_guadagni = ctk.CTkFrame(frame_kpi_row)
+        self.frame_guadagni.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         self.frame_guadagni.grid_columnconfigure(0, weight=1)
         
         ctk.CTkLabel(self.frame_guadagni, text="Statistiche (Anno Corrente)",
-                     font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=20, pady=(15, 10))
+                     font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=20, pady=(15, 10), sticky="w")
         
         self.lbl_incassato = ctk.CTkLabel(self.frame_guadagni, text="Incassato (YTD): € 0.00", font=("Arial", 14), anchor="w")
         self.lbl_incassato.grid(row=1, column=0, sticky="ew", padx=20, pady=5)
@@ -52,53 +56,60 @@ class PaginaCruscotto(PageBase):
         self.lbl_uscite.grid(row=2, column=0, sticky="ew", padx=20, pady=5)
         
         self.lbl_margine = ctk.CTkLabel(self.frame_guadagni, text="Margine (YTD): € 0.00", font=("Arial", 14, "bold"), anchor="w")
-        self.lbl_margine.grid(row=3, column=0, sticky="ew", padx=20, pady=(5, 15))
+        self.lbl_margine.grid(row=3, column=0, sticky="ew", padx=20, pady=(10, 15))
 
-        # 2. Unpaid Invoices Card (Top-Right)
-        self.frame_fatture = ctk.CTkFrame(self)
-        self.frame_fatture.grid(row=0, column=1, sticky="nsew", padx=15, pady=15)
+        # 2. Unpaid Invoices Card
+        self.frame_fatture = ctk.CTkFrame(frame_kpi_row)
+        self.frame_fatture.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         self.frame_fatture.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(self.frame_fatture, text="Fatture da Incassare",
-                     font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=20, pady=(15, 10))
+                     font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=20, pady=(15, 10), sticky="w")
         
         self.lbl_fatture_count = ctk.CTkLabel(self.frame_fatture, text="0 fatture in attesa", font=("Arial", 14), anchor="w")
         self.lbl_fatture_count.grid(row=1, column=0, sticky="ew", padx=20, pady=5)
         
         self.lbl_fatture_totale = ctk.CTkLabel(self.frame_fatture, text="Totale da incassare: € 0.00", font=("Arial", 14, "bold"), anchor="w")
-        self.lbl_fatture_totale.grid(row=2, column=0, sticky="ew", padx=20, pady=(5, 15))
+        self.lbl_fatture_totale.grid(row=2, column=0, sticky="ew", padx=20, pady=(10, 15))
+        
+        # --- Detail Row (Row 1) ---
+        frame_detail_row = ctk.CTkFrame(self, fg_color="transparent")
+        frame_detail_row.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=10, pady=(5, 10))
+        frame_detail_row.grid_columnconfigure((0, 1), weight=1)
+        frame_detail_row.grid_rowconfigure(0, weight=1)
 
-        # 3. Active Projects Card (Bottom-Left)
-        self.frame_progetti = ctk.CTkFrame(self)
-        self.frame_progetti.grid(row=1, column=0, sticky="nsew", padx=15, pady=15)
+        # 3. Active Projects Card
+        self.frame_progetti = ctk.CTkFrame(frame_detail_row)
+        self.frame_progetti.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         self.frame_progetti.grid_columnconfigure(0, weight=1)
-        self.frame_progetti.grid_rowconfigure(2, weight=1) # Allow list to expand
+        self.frame_progetti.grid_rowconfigure(2, weight=1) # Allow textbox to expand
 
         ctk.CTkLabel(self.frame_progetti, text="Progetti Attivi",
-                     font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=20, pady=(15, 10))
+                     font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=20, pady=(15, 10), sticky="w")
         
         self.lbl_progetti_count = ctk.CTkLabel(self.frame_progetti, text="0 progetti in corso", font=("Arial", 14), anchor="w")
         self.lbl_progetti_count.grid(row=1, column=0, sticky="ew", padx=20, pady=5)
         
-        # This label will hold the list of project names
-        self.lbl_progetti_lista = ctk.CTkLabel(self.frame_progetti, text="", font=("Arial", 12), anchor="nw", justify="left")
-        self.lbl_progetti_lista.grid(row=2, column=0, sticky="nsew", padx=20, pady=(5, 15))
+        # Replaced Label with a read-only Textbox for better formatting
+        self.txt_progetti_lista = ctk.CTkTextbox(self.frame_progetti, font=("Arial", 12), activate_scrollbars=False)
+        self.txt_progetti_lista.grid(row=2, column=0, sticky="nsew", padx=15, pady=(5, 15))
+        self.txt_progetti_lista.configure(state="disabled")
 
-        # 4. Upcoming Deadlines Card (Bottom-Right)
-        self.frame_scadenze = ctk.CTkFrame(self)
-        self.frame_scadenze.grid(row=1, column=1, sticky="nsew", padx=15, pady=15)
+        # 4. Upcoming Deadlines Card
+        self.frame_scadenze = ctk.CTkFrame(frame_detail_row)
+        self.frame_scadenze.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         self.frame_scadenze.grid_columnconfigure(0, weight=1)
-        self.frame_scadenze.grid_rowconfigure(1, weight=1) # Allow list to expand
+        self.frame_scadenze.grid_rowconfigure(1, weight=1) # Allow textbox to expand
 
         ctk.CTkLabel(self.frame_scadenze, text="Scadenze Imminenti (7gg)",
-                     font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=20, pady=(15, 10))
+                     font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=20, pady=(15, 10), sticky="w")
         
-        # This label will hold the list of deadlines
-        self.lbl_scadenze_lista = ctk.CTkLabel(self.frame_scadenze, text="Nessuna scadenza imminente.", font=("Arial", 12), anchor="nw", justify="left")
-        self.lbl_scadenze_lista.grid(row=1, column=0, sticky="nsew", padx=20, pady=(5, 15))
+        # Replaced Label with a read-only Textbox
+        self.txt_scadenze_lista = ctk.CTkTextbox(self.frame_scadenze, font=("Arial", 12))
+        self.txt_scadenze_lista.grid(row=1, column=0, sticky="nsew", padx=15, pady=(5, 15))
+        self.txt_scadenze_lista.configure(state="disabled")
         
-        # --- Report Export Button ---
-        # Spans both columns at the bottom
+        # --- Report Export Button (Row 2) ---
         self.btn_export = ctk.CTkButton(self, text="Esporta Report Annuale Completo (PDF/Excel)",
                                         command=self.esporta_report_completo)
         self.btn_export.grid(row=2, column=0, columnspan=2, sticky="ew", padx=15, pady=(0, 15))
@@ -113,7 +124,9 @@ class PaginaCruscotto(PageBase):
         """
         print("Refreshing Dashboard page...")
         try:
-            dati = db_cruscotto.get_dati_cruscotto()
+            # --- CHIAMATA CORRETTA ---
+            dati = db_dashboard.get_dashboard_data()
+            # --- FINE CORREZIONE ---
             
             # 1. Update Earnings
             self.lbl_incassato.configure(text=f"Incassato (YTD):   {dati['incassato_ytd']:.2f} €")
@@ -133,7 +146,11 @@ class PaginaCruscotto(PageBase):
                 progetti_testo += "... e altri."
             if not progetti_testo:
                 progetti_testo = "Nessun progetto attivo."
-            self.lbl_progetti_lista.configure(text=progetti_testo)
+            
+            self.txt_progetti_lista.configure(state="normal") # Enable writing
+            self.txt_progetti_lista.delete("1.0", "end")
+            self.txt_progetti_lista.insert("1.0", progetti_testo)
+            self.txt_progetti_lista.configure(state="disabled") # Disable again
             
             # 4. Update Deadlines
             scadenze_testo = ""
@@ -141,10 +158,14 @@ class PaginaCruscotto(PageBase):
                 scadenze_testo += f"• {s['date']}: {s['title']}\n"
             if not scadenze_testo:
                 scadenze_testo = "Nessuna scadenza imminente."
-            self.lbl_scadenze_lista.configure(text=scadenze_testo)
+
+            self.txt_scadenze_lista.configure(state="normal") # Enable writing
+            self.txt_scadenze_lista.delete("1.0", "end")
+            self.txt_scadenze_lista.insert("1.0", scadenze_testo)
+            self.txt_scadenze_lista.configure(state="disabled") # Disable again
             
         except Exception as e:
-            tkmb.showerror("Errore Cruscotto", f"Impossibile caricare i dati del cruscotto:\n{e}")
+            tkmb.showerror("Errore Dashboard", f"Impossibile caricare i dati del dashboard:\n{e}")
 
     def esporta_report_completo(self):
         """
@@ -180,7 +201,7 @@ class PaginaCruscotto(PageBase):
         # 3. Call backend to generate the report
         try:
             print(f"Generazione report {file_format} per l'anno {year} in corso...")
-            success, msg = db_cruscotto.export_report_completo(year, file_format)
+            success, msg = db_dashboard.export_report_completo(year, file_format)
             
             if success:
                 tkmb.showinfo("Successo", f"Report generato con successo!\n{msg}")

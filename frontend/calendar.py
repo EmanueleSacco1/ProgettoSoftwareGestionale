@@ -1,83 +1,74 @@
-import tkinter
 import tkinter.messagebox as tkmb
 import customtkinter as ctk
 from datetime import datetime, timedelta
-
-# Import backend logic
-from backend import calendar as db_calendario
-from backend import persistence as db
-from backend import email_utils
-
-# Import the base class using a relative import
+from backend import calendar as db_calendario, persistence as db, email_utils
 from .page_base import PageBase
 
 class PaginaCalendario(PageBase):
-    """
-    Page for managing the Calendar and SMTP settings.
-    
-    This page shows upcoming events and allows configuration
-    and testing of email notifications.
-    """
+    """Gestione Calendario e Notifiche Email."""
+
     def __init__(self, master):
-        """
-        Initialize the Calendar page.
-        
-        Args:
-            master: The parent widget (main_content_frame from App).
-        """
         super().__init__(master, fg_color="transparent")
 
-        # --- Layout ---
-        # Column 0 = Actions/Config, Column 1 = Event List
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=2)
         self.grid_rowconfigure(0, weight=1)
-        
-        # --- Column 0: Actions and Config ---
-        frame_azioni = ctk.CTkFrame(self)
+
+        # --- Colonna sinistra: azioni ---
+        frame_azioni = ctk.CTkFrame(self, corner_radius=10)
         frame_azioni.grid(row=0, column=0, sticky="nsew", padx=(20, 10), pady=20)
         frame_azioni.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(frame_azioni, text="Calendario e Notifiche", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, padx=15, pady=15, sticky="w")
-        
-        # --- Event View ---
-        ctk.CTkLabel(frame_azioni, text="Visualizza Periodo:").grid(row=1, column=0, padx=15, pady=(10,0), sticky="w")
-        
-        ctk.CTkButton(frame_azioni, text="Oggi", command=lambda: self.aggiorna_vista_eventi(0)).grid(row=2, column=0, sticky="ew", padx=15, pady=5)
-        ctk.CTkButton(frame_azioni, text="Prossimi 7 giorni", command=lambda: self.aggiorna_vista_eventi(7)).grid(row=3, column=0, sticky="ew", padx=15, pady=5)
-        ctk.CTkButton(frame_azioni, text="Prossimi 30 giorni", command=lambda: self.aggiorna_vista_eventi(30)).grid(row=4, column=0, sticky="ew", padx=15, pady=5)
+        ctk.CTkLabel(frame_azioni, text="Calendario e Notifiche", font=ctk.CTkFont(size=18, weight="bold")).grid(
+            row=0, column=0, padx=15, pady=15, sticky="w"
+        )
+
+        ctk.CTkLabel(frame_azioni, text="Visualizza periodo:").grid(row=1, column=0, padx=15, pady=(10, 5), sticky="w")
+        for i, (label, days) in enumerate([
+            ("Oggi", 0),
+            ("Prossimi 7 giorni", 7),
+            ("Prossimi 30 giorni", 30),
+        ], start=2):
+            ctk.CTkButton(frame_azioni, text=label, command=lambda d=days: self.aggiorna_vista_eventi(d)).grid(
+                row=i, column=0, sticky="ew", padx=15, pady=5
+            )
 
         ctk.CTkFrame(frame_azioni, height=2, fg_color="gray").grid(row=5, column=0, sticky="ew", padx=10, pady=10)
-        
-        # --- Event Actions ---
-        ctk.CTkButton(frame_azioni, text="Aggiungi Evento Manuale", command=self.apri_popup_evento_manuale).grid(row=6, column=0, sticky="ew", padx=15, pady=5)
-        ctk.CTkButton(frame_azioni, text="Aggiorna Scadenze Automatiche", command=self.aggiorna_scadenze_auto).grid(row=7, column=0, sticky="ew", padx=15, pady=5)
-        
+
+        ctk.CTkButton(frame_azioni, text="Aggiungi Evento Manuale", command=self.apri_popup_evento_manuale).grid(
+            row=6, column=0, sticky="ew", padx=15, pady=5
+        )
+        ctk.CTkButton(frame_azioni, text="Aggiorna Scadenze Automatiche", command=self.aggiorna_scadenze_auto).grid(
+            row=7, column=0, sticky="ew", padx=15, pady=5
+        )
+
         ctk.CTkFrame(frame_azioni, height=2, fg_color="gray").grid(row=8, column=0, sticky="ew", padx=10, pady=10)
 
-        # --- Email Config ---
-        ctk.CTkLabel(frame_azioni, text="Configurazione Email", font=ctk.CTkFont(weight="bold")).grid(row=9, column=0, padx=15, pady=10, sticky="w")
-        
-        self.btn_config_smtp = ctk.CTkButton(frame_azioni, text="Configura SMTP", command=self.apri_popup_config_smtp)
-        self.btn_config_smtp.grid(row=10, column=0, sticky="ew", padx=15, pady=5)
-        
-        self.btn_test_email = ctk.CTkButton(frame_azioni, text="Invia Email di Test", command=self.invia_test_email)
-        self.btn_test_email.grid(row=11, column=0, sticky="ew", padx=15, pady=5)
+        ctk.CTkLabel(frame_azioni, text="Configurazione Email", font=ctk.CTkFont(weight="bold")).grid(
+            row=9, column=0, padx=15, pady=10, sticky="w"
+        )
+        ctk.CTkButton(frame_azioni, text="Configura SMTP", command=self.apri_popup_config_smtp).grid(
+            row=10, column=0, sticky="ew", padx=15, pady=5
+        )
+        ctk.CTkButton(frame_azioni, text="Invia Email di Test", command=self.invia_test_email).grid(
+            row=11, column=0, sticky="ew", padx=15, pady=5
+        )
 
-        # --- Column 1: Event List Display ---
-        frame_vista = ctk.CTkFrame(self)
+        # --- Colonna destra: eventi ---
+        frame_vista = ctk.CTkFrame(self, corner_radius=10)
         frame_vista.grid(row=0, column=1, sticky="nsew", padx=(10, 20), pady=20)
         frame_vista.grid_rowconfigure(1, weight=1)
         frame_vista.grid_columnconfigure(0, weight=1)
-        
+
         self.lbl_titolo_vista = ctk.CTkLabel(frame_vista, text="Scadenze", font=ctk.CTkFont(size=18, weight="bold"))
         self.lbl_titolo_vista.grid(row=0, column=0, padx=15, pady=15, sticky="w")
-        
+
         self.txt_eventi = ctk.CTkTextbox(frame_vista, font=ctk.CTkFont(size=13))
         self.txt_eventi.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="nsew")
         self.txt_eventi.configure(state="disabled")
 
         self.on_show()
+
 
     def on_show(self):
         """

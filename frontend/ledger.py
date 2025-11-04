@@ -1,22 +1,21 @@
 import tkinter
 import tkinter.messagebox as tkmb
 import customtkinter as ctk
+from .page_base import PageBase
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta
+import os
 
 # Import backend logic
-from backend import ledger as db_ledger
+from backend import ledger as db_ledger     # Rinominato
 from backend import tax as db_tasse
 from backend import documents as db_docs
 from backend import address_book as db_rubrica
 from backend import persistence as db
 
-# Import the base class
-from .page_base import PageBase
-
-class PaginaContabilita(PageBase):
+class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
     """
-    Page for managing the Financial Ledger and Tax Estimates.
+    Page for managing the Financial Ledger (Registro Movimenti) and Tax Estimates.
     
     This page uses a CTkTabview to separate the two main functions:
     1.  Ledger: Logging income/expenses and exporting for the accountant.
@@ -29,14 +28,9 @@ class PaginaContabilita(PageBase):
         Args:
             master: The parent widget (main_content_frame from App).
         """
-        super().__init__(master)
-
-        # Remove the "Under Construction" label from PageBase
-        for widget in self.winfo_children():
-            widget.destroy()
+        super().__init__(master, fg_color="transparent")
         
         # Configure layout
-        self.pack(fill="both", expand=True, padx=20, pady=20)
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
         
@@ -45,11 +39,11 @@ class PaginaContabilita(PageBase):
         self.tab_view = ctk.CTkTabview(self)
         self.tab_view.grid(row=1, column=0, sticky="nsew")
         
-        self.tab_primanota = self.tab_view.add("Prima Nota")
+        self.tab_primanota = self.tab_view.add("Registro Movimenti") # Rinominato
         self.tab_tasse = self.tab_view.add("Stima Tasse")
         
         # Create the widgets for each tab
-        self._crea_widgets_tab_primanota(self.tab_primanota)
+        self._crea_widgets_tab_registro(self.tab_primanota) # Rinominato
         self._crea_widgets_tab_tasse(self.tab_tasse)
 
     def on_show(self):
@@ -62,10 +56,10 @@ class PaginaContabilita(PageBase):
         self._aggiorna_lista_movimenti()
         self._carica_aliquote() # Reload tax rates in case they changed
 
-    # --- Prima Nota (Financial Ledger) Tab ---
+    # --- Registro Movimenti (Ledger) Tab ---
 
-    def _crea_widgets_tab_primanota(self, tab):
-        """Populates the 'Prima Nota' (Ledger) tab with its widgets."""
+    def _crea_widgets_tab_registro(self, tab): # Rinominato
+        """Populates the 'Registro Movimenti' (Ledger) tab with its widgets."""
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_rowconfigure(1, weight=1)
         
@@ -81,7 +75,7 @@ class PaginaContabilita(PageBase):
         self.frame_scroll_movimenti = ctk.CTkScrollableFrame(tab)
         self.frame_scroll_movimenti.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         
-        self.frame_scroll_movimenti.grid_columnconfigure(1, weight=1)
+        self.frame_scroll_movimenti.grid_columnconfigure(1, weight=1) # Configure column for description
         
     def _aggiorna_lista_movimenti(self):
         """Clears and repopulates the list of financial transactions."""
@@ -104,9 +98,10 @@ class PaginaContabilita(PageBase):
             # Header
             header_frame = ctk.CTkFrame(self.frame_scroll_movimenti, fg_color="transparent")
             header_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=5, pady=2)
-            header_frame.grid_columnconfigure(0, minsize=100)
-            header_frame.grid_columnconfigure(1, weight=1)
-            header_frame.grid_columnconfigure(2, minsize=100)
+            header_frame.grid_columnconfigure(0, minsize=100) # Date
+            header_frame.grid_columnconfigure(1, weight=1)   # Description
+            header_frame.grid_columnconfigure(2, minsize=100) # Amount
+            header_frame.grid_columnconfigure(3, minsize=30)  # Delete btn
             ctk.CTkLabel(header_frame, text="Data", font=ctk.CTkFont(weight="bold"), anchor="w").grid(row=0, column=0, sticky="w")
             ctk.CTkLabel(header_frame, text="Descrizione", font=ctk.CTkFont(weight="bold"), anchor="w").grid(row=0, column=1, sticky="w")
             ctk.CTkLabel(header_frame, text="Importo", font=ctk.CTkFont(weight="bold"), anchor="e").grid(row=0, column=2, sticky="e")
@@ -118,6 +113,7 @@ class PaginaContabilita(PageBase):
                 row_frame.grid(row=i+3, column=0, columnspan=4, sticky="ew", padx=5)
                 row_frame.grid_columnconfigure(1, weight=1)
                 row_frame.grid_columnconfigure(2, minsize=100)
+                row_frame.grid_columnconfigure(3, minsize=30)
 
                 color = "green" if mov['type'] == 'Entrata' else "red"
                 importo = mov['amount_totale'] if mov['type'] == 'Entrata' else -mov['amount_totale']
@@ -336,7 +332,7 @@ class PaginaContabilita(PageBase):
             title="Salva Esportazione",
             defaultextension=".xlsx",
             filetypes=[("Excel Workbook", "*.xlsx"), ("CSV (Separatore ;)", "*.csv")],
-            initialfile=f"esportazione_primanota_{year}"
+            initialfile=f"esportazione_registro_{year}" # Nome file aggiornato
         )
         
         if not file_path: return
@@ -371,7 +367,7 @@ class PaginaContabilita(PageBase):
                 tkmb.showwarning("Nessun Dato", msg)
                 return
             
-            filename = f"statistiche_primanota_{year}.png"
+            filename = f"statistiche_movimenti_{year}.png" # Nome file aggiornato
             success, msg_plot = db_ledger.plot_monthly_stats(stats_df, filename)
             
             if success:

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 import pandas as pd
 
-# Import all backend modules to read data, using relative imports
+# Import backend modules using relative imports
 from . import persistence as db
 from . import address_book as db_rubrica
 from . import projects as db_progetti
@@ -21,7 +21,7 @@ from reportlab.lib.units import cm
 
 # --- Dashboard UI Functions ---
 
-def get_dati_cruscotto():
+def get_dashboard_data(): # <-- FUNZIONE RINOMINATA
     """
     Fetches all data points required for the main dashboard UI.
     This function reads from multiple backend modules to create a summary.
@@ -50,7 +50,7 @@ def get_dati_cruscotto():
     scadenze_imminenti = db_calendario.get_eventi(today, end_date)
     
     # 4. Earning Statistics (Cash basis, Year-To-Date)
-    # We use the internal _get_dataframe helper from the ledger
+    # Use the internal _get_dataframe helper from the ledger
     df_movimenti, _ = db_ledger._get_dataframe(current_year)
     incassato_ytd = Decimal('0')
     uscite_ytd = Decimal('0')
@@ -115,7 +115,7 @@ def _get_report_dataframes(year):
         for col in ['Imponibile', 'IVA', 'Ritenuta', 'Netto a Pagare']:
             df_fatture[col] = df_fatture[col].astype(float)
 
-    # 2. Financial Ledger (Prima Nota) Data
+    # 2. Financial Ledger (Ledger) Data
     df_movimenti, _ = db_ledger._get_dataframe(year) # This helper already returns a DF
     if not df_movimenti.empty:
         df_movimenti = df_movimenti.reset_index()[[
@@ -160,7 +160,7 @@ def _export_to_excel(dataframes, filename):
             if 'fatture' in dataframes and not dataframes['fatture'].empty:
                 dataframes['fatture'].to_excel(writer, sheet_name='Riepilogo Fatture', index=False)
             if 'movimenti' in dataframes and not dataframes['movimenti'].empty:
-                dataframes['movimenti'].to_excel(writer, sheet_name='Riepilogo PrimaNota', index=False)
+                dataframes['movimenti'].to_excel(writer, sheet_name='Riepilogo Movimenti', index=False)
             if 'ore' in dataframes and not dataframes['ore'].empty:
                 dataframes['ore'].to_excel(writer, sheet_name='Dettaglio Ore', index=False)
         return True, f"Report Excel salvato come {filename}"
@@ -216,7 +216,7 @@ def _export_to_pdf(dataframes, filename, year):
 
         # Table 2: Financial Ledger
         if 'movimenti' in dataframes and not dataframes['movimenti'].empty:
-            story.append(Paragraph("Riepilogo Movimenti Prima Nota", styles['h2']))
+            story.append(Paragraph("Riepilogo Movimenti", styles['h2']))
             df = dataframes['movimenti'].head(50) # Limit to 50 rows
             data = [df.columns.values.tolist()] + df.values.tolist()
             t = Table(data, colWidths=[2.5*cm, 1.5*cm, 5*cm, 2*cm, 2*cm, 2*cm, 2.5*cm])
@@ -240,7 +240,7 @@ def _export_to_pdf(dataframes, filename, year):
         doc.build(story)
         return True, f"Report PDF salvato come {filename}"
     except Exception as e:
-        return False, f"Errore during l'esportazione PDF: {e}"
+        return False, f"Errore durante l'esportazione PDF: {e}"
 
 def export_report_completo(year, format='excel'):
     """

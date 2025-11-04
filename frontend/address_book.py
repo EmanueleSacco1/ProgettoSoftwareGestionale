@@ -1,130 +1,95 @@
-import tkinter
 import tkinter.messagebox as tkmb
 import customtkinter as ctk
-
-# Import backend logic
 from backend import address_book as db_rubrica
-
-# Import the base class using a relative import
 from .page_base import PageBase
 
 class PaginaRubrica(PageBase):
-    """
-    Page for managing the Address Book.
+    """Gestione della Rubrica (lista + dettaglio contatto)."""
     
-    This page features a classic list/detail layout, allowing users
-    to search and select contacts from a list on the left and
-    edit their details in a form on the right.
-    """
     def __init__(self, master):
-        """
-        Initialize the Address Book page.
-        
-        Args:
-            master: The parent widget (main_content_frame from App).
-        """
         super().__init__(master, fg_color="transparent")
 
-        # --- Layout ---
-        # Column 0 = List, Column 1 = Form
-        self.grid_columnconfigure(0, weight=1) 
-        self.grid_columnconfigure(1, weight=2) 
+        # Layout principale
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=2)
         self.grid_rowconfigure(1, weight=1)
-        
-        self.id_contatto_selezionato = None # Tracks which contact is being edited
+
+        self.id_contatto_selezionato = None
         self.font_bold = ctk.CTkFont(weight="bold")
 
-        # --- Column 0: List and Search ---
-        frame_lista = ctk.CTkFrame(self)
+        # --- Colonna sinistra: Lista contatti ---
+        frame_lista = ctk.CTkFrame(self, corner_radius=10)
         frame_lista.grid(row=0, column=0, rowspan=2, padx=(20, 10), pady=20, sticky="nsew")
         frame_lista.grid_rowconfigure(2, weight=1)
         frame_lista.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(frame_lista, text="Contatti", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, columnspan=2, padx=10, pady=(10,5), sticky="w")
-        
-        # Search Bar
-        self.entry_ricerca = ctk.CTkEntry(frame_lista, placeholder_text="Cerca per nome, P.IVA...")
-        self.entry_ricerca.grid(row=1, column=0, padx=(10,5), pady=(5,10), sticky="ew")
-        # Bind the <Return> key (Enter) to the search function
+        ctk.CTkLabel(frame_lista, text="Rubrica Contatti", font=ctk.CTkFont(size=18, weight="bold")).grid(
+            row=0, column=0, columnspan=2, padx=15, pady=(15, 10), sticky="w"
+        )
+
+        # Barra di ricerca
+        search_frame = ctk.CTkFrame(frame_lista, fg_color="transparent")
+        search_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
+        search_frame.grid_columnconfigure(0, weight=1)
+
+        self.entry_ricerca = ctk.CTkEntry(search_frame, placeholder_text="Cerca per nome o P.IVA...")
+        self.entry_ricerca.grid(row=0, column=0, sticky="ew", padx=(0, 5))
         self.entry_ricerca.bind("<Return>", lambda e: self.aggiorna_lista_contatti())
-        
-        btn_cerca = ctk.CTkButton(frame_lista, text="Cerca", width=60, command=self.aggiorna_lista_contatti)
-        btn_cerca.grid(row=1, column=1, padx=(5,10), pady=(5,10), sticky="ew")
 
-        # Scrollable Frame for contact list
+        btn_cerca = ctk.CTkButton(search_frame, text="Cerca", width=80, command=self.aggiorna_lista_contatti)
+        btn_cerca.grid(row=0, column=1)
+
+        # Elenco contatti
         self.frame_scroll_contatti = ctk.CTkScrollableFrame(frame_lista, fg_color="transparent")
-        self.frame_scroll_contatti.grid(row=2, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+        self.frame_scroll_contatti.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
-        # --- Column 1: Detail Form ---
-        frame_form = ctk.CTkFrame(self)
+        # --- Colonna destra: Form dettagli ---
+        frame_titolo_form = ctk.CTkFrame(self, fg_color="transparent")
+        frame_titolo_form.grid(row=0, column=1, padx=(10, 20), pady=(20, 0), sticky="ew")
+
+        self.lbl_titolo_form = ctk.CTkLabel(
+            frame_titolo_form, text="Dettaglio Contatto", font=ctk.CTkFont(size=18, weight="bold")
+        )
+        self.lbl_titolo_form.pack(side="left", padx=10)
+
+        btn_nuovo = ctk.CTkButton(frame_titolo_form, text="Nuovo Contatto", width=120, command=self.pulisci_form)
+        btn_nuovo.pack(side="right", padx=10)
+
+        frame_form = ctk.CTkFrame(self, corner_radius=10)
         frame_form.grid(row=1, column=1, padx=(10, 20), pady=(0, 20), sticky="nsew")
         frame_form.grid_columnconfigure(1, weight=1)
-        
-        # Form Title and "New" button
-        frame_titolo_form = ctk.CTkFrame(self, fg_color="transparent")
-        frame_titolo_form.grid(row=0, column=1, padx=(10,20), pady=(20,0), sticky="ew")
-        
-        self.lbl_titolo_form = ctk.CTkLabel(frame_titolo_form, text="Dettaglio Contatto", font=ctk.CTkFont(size=18, weight="bold"))
-        self.lbl_titolo_form.pack(side="left", padx=10)
-        
-        btn_pulisci = ctk.CTkButton(frame_titolo_form, text="Nuovo Contatto", width=100, command=self.pulisci_form)
-        btn_pulisci.pack(side="right", padx=10)
 
-        # --- Form Grid ---
-        row = 0
-        ctk.CTkLabel(frame_form, text="Tipo").grid(row=row, column=0, padx=10, pady=10, sticky="w")
+        labels = [
+            ("Tipo", None),
+            ("Nome*", "entry_nome"),
+            ("Azienda", "entry_azienda"),
+            ("P.IVA / CF", "entry_piva"),
+            ("Email", "entry_email"),
+            ("Telefono", "entry_tel"),
+            ("Indirizzo", "entry_indirizzo"),
+            ("Note", "entry_note"),
+        ]
+
         self.seg_tipo = ctk.CTkSegmentedButton(frame_form, values=["Cliente", "Fornitore"])
-        self.seg_tipo.grid(row=row, column=1, padx=10, pady=10, sticky="ew")
-        
-        row += 1
-        ctk.CTkLabel(frame_form, text="Nome*").grid(row=row, column=0, padx=10, pady=10, sticky="w")
-        self.entry_nome = ctk.CTkEntry(frame_form)
-        self.entry_nome.grid(row=row, column=1, padx=10, pady=10, sticky="ew")
-        
-        row += 1
-        ctk.CTkLabel(frame_form, text="Azienda").grid(row=row, column=0, padx=10, pady=10, sticky="w")
-        self.entry_azienda = ctk.CTkEntry(frame_form)
-        self.entry_azienda.grid(row=row, column=1, padx=10, pady=10, sticky="ew")
+        self.seg_tipo.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
-        row += 1
-        ctk.CTkLabel(frame_form, text="P.IVA / CF").grid(row=row, column=0, padx=10, pady=10, sticky="w")
-        self.entry_piva = ctk.CTkEntry(frame_form)
-        self.entry_piva.grid(row=row, column=1, padx=10, pady=10, sticky="ew")
+        row = 1
+        for label, attr in labels[1:]:
+            ctk.CTkLabel(frame_form, text=label).grid(row=row, column=0, padx=10, pady=8, sticky="w")
+            entry = ctk.CTkEntry(frame_form)
+            entry.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
+            setattr(self, attr, entry)
+            row += 1
 
-        row += 1
-        ctk.CTkLabel(frame_form, text="Email").grid(row=row, column=0, padx=10, pady=10, sticky="w")
-        self.entry_email = ctk.CTkEntry(frame_form)
-        self.entry_email.grid(row=row, column=1, padx=10, pady=10, sticky="ew")
+        # Pulsanti azione
+        frame_btn = ctk.CTkFrame(frame_form, fg_color="transparent")
+        frame_btn.grid(row=row, column=0, columnspan=2, padx=10, pady=20, sticky="ew")
+        frame_btn.grid_columnconfigure((0, 1), weight=1)
 
-        row += 1
-        ctk.CTkLabel(frame_form, text="Telefono").grid(row=row, column=0, padx=10, pady=10, sticky="w")
-        self.entry_tel = ctk.CTkEntry(frame_form)
-        self.entry_tel.grid(row=row, column=1, padx=10, pady=10, sticky="ew")
-        
-        row += 1
-        ctk.CTkLabel(frame_form, text="Indirizzo").grid(row=row, column=0, padx=10, pady=10, sticky="w")
-        self.entry_indirizzo = ctk.CTkEntry(frame_form)
-        self.entry_indirizzo.grid(row=row, column=1, padx=10, pady=10, sticky="ew")
+        ctk.CTkButton(frame_btn, text="Salva Modifiche", command=self.salva_contatto).grid(row=0, column=0, padx=5, sticky="ew")
+        ctk.CTkButton(frame_btn, text="Elimina Contatto", fg_color="#D32F2F", hover_color="#B71C1C",
+                      command=self.elimina_contatto).grid(row=0, column=1, padx=5, sticky="ew")
 
-        row += 1
-        ctk.CTkLabel(frame_form, text="Note").grid(row=row, column=0, padx=10, pady=10, sticky="w")
-        self.entry_note = ctk.CTkEntry(frame_form)
-        self.entry_note.grid(row=row, column=1, padx=10, pady=10, sticky="ew")
-
-        # --- Form Action Buttons ---
-        frame_azioni_form = ctk.CTkFrame(frame_form, fg_color="transparent")
-        frame_azioni_form.grid(row=row+1, column=0, columnspan=2, padx=10, pady=20, sticky="ew")
-        frame_azioni_form.grid_columnconfigure(0, weight=1)
-        frame_azioni_form.grid_columnconfigure(1, weight=1)
-        
-        btn_salva = ctk.CTkButton(frame_azioni_form, text="Salva Modifiche", command=self.salva_contatto)
-        btn_salva.grid(row=0, column=0, padx=5, pady=10, sticky="ew")
-
-        btn_elimina = ctk.CTkButton(frame_azioni_form, text="Elimina Contatto", fg_color="#D32F2F", hover_color="#B71C1C",
-                                     command=self.elimina_contatto)
-        btn_elimina.grid(row=0, column=1, padx=5, pady=10, sticky="ew")
-
-        # Load initial data when page is created
         self.on_show()
 
     def on_show(self):

@@ -14,7 +14,7 @@ from .page_base import PageBase
 
 class PaginaDocumenti(PageBase):
     """
-    Page for managing Quotes and Invoices.
+    Page for managing Quotes (Preventivi) and Invoices (Fatture).
     
     This page uses a main CTkTabview to separate the two document types.
     It contains logic for creating, listing, and exporting documents.
@@ -27,13 +27,13 @@ class PaginaDocumenti(PageBase):
             master: The parent widget (main_content_frame from App).
         """
         super().__init__(master)
-
-        # Remove the "Under Construction" label from PageBase
-        for widget in self.winfo_children():
-            widget.destroy()
+        
+        # --- ERRORE RIMOSSO ---
+        # La riga 'self.pack(...)' è stata rimossa.
+        # PageBase gestisce già il layout interno.
+        # --- FINE RIMOZIONE ---
         
         # Configure layout
-        self.pack(fill="both", expand=True, padx=20, pady=20)
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
         
@@ -371,6 +371,7 @@ class PaginaDocumenti(PageBase):
 
         # --- Save Button ---
         def salva_documento():
+            """Callback to save the document."""
             try:
                 # 1. Get Client ID
                 client_id = clienti_map[combo_clienti.get()]
@@ -507,6 +508,7 @@ class PaginaDocumenti(PageBase):
         combo_stati.pack(pady=5, padx=20, fill="x")
         
         def salva_stato():
+            """Callback to save the new status."""
             new_status = combo_stati.get()
             try:
                 db_docs.update_document_status(self.selected_invoice_id, new_status)
