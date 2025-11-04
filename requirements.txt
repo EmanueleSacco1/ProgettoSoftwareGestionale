@@ -1,0 +1,11 @@
+# ---------------------#
+# List of dependencies #
+# ---------------------#
+
+pandas
+openpyxl
+reportlab
+matplotlib
+WeasyPrint
+Jinja2
+customtkinter

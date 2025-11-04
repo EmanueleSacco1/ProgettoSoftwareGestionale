@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ doc.doc_type_display }}</title>
+    <style>
+        /* * This is a simple CSS stylesheet for the WeasyPrint PDF template.
+         * It defines the page layout, fonts, and table styles.
+         */
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        body {
+            font-family: 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+            font-size: 10pt;
+            color: #333;
+        }
+        .header-table {
+            width: 100%;
+            border: 0;
+            margin-bottom: 30px;
+        }
+        .header-table td {
+            width: 50%;
+            vertical-align: top;
+        }
+        .my-company {
+            text-align: left;
+            font-size: 9pt;
+            line-height: 1.4;
+            /* Allow long lines (like addresses) to break */
+            word-wrap: break-word;
+        }
+        .my-company strong {
+            font-size: 11pt;
+            color: #000;
+        }
+        .client-info {
+            text-align: right;
+            font-size: 10pt;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        .document-title {
+            text-align: left;
+            margin-bottom: 25px;
+        }
+        .document-title h1 {
+            font-size: 24pt;
+            color: #000;
+            margin: 0;
+        }
+        .document-title p {
+            font-size: 11pt;
+            margin: 2px 0;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .items-table th, .items-table td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            /* Allow long descriptions to wrap */
+            word-wrap: break-word;
+        }
+        .items-table th {
+            background-color: #f2f2f2;
+            font-size: 9pt;
+            text-transform: uppercase;
+        }
+        /* Column widths */
+        .items-table .col-desc { width: 45%; }
+        .items-table .col-qty { width: 10%; text-align: right; }
+        .items-table .col-price { width: 20%; text-align: right; }
+        .items-table .col-total { width: 25%; text-align: right; }
+        
+        .totals-table {
+            width: 45%;
+            margin-left: auto;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        .totals-table td {
+            padding: 5px 8px;
+            border: 1px solid #ccc;
+        }
+        .totals-table .label {
+            text-align: right;
+            font-weight: bold;
+        }
+        .totals-table .value {
+            text-align: right;
+            min-width: 100px;
+        }
+        .totals-table .grand-total .label,
+        .totals-table .grand-total .value {
+            font-weight: bold;
+            font-size: 12pt;
+            background-color: #f2f2f2;
+        }
+        .footer-notes {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 2px solid #555;
+            font-size: 9pt;
+            line-height: 1.4;
+            /* Allow notes to wrap */
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. Header with Company and Client Info -->
+    <table class="header-table">
+        <tr>
+            <td class="my-company">
+                <!-- 'my_details' is injected by the backend -->
+                <strong>{{ my_details.name | escape }}</strong><br>
+                <!-- nl2br filter converts newlines to <br> tags -->
+                {{ my_details.address | nl2br | escape }}<br>
+                P.IVA: {{ my_details.vat_id | escape }}
+            </td>
+            <td class="client-info">
+                <strong>Spett.le</strong><br>
+                <!-- 'client' is injected by the backend -->
+                {{ client.name | escape }}<br>
+                {% if client.company %}{{ client.company | escape }}<br>{% endif %}
+                {{ client.address | escape }}<br>
+                P.IVA/CF: {{ client.vat_id | escape }}
+            </td>
+        </tr>
+    </table>
+
+    <!-- 2. Document Title and Details -->
+    <div class="document-title">
+        <!-- 'doc' is injected by the backend -->
+        <h1>{{ doc.doc_type_display | escape }}</h1>
+        <p>Numero: <strong>{{ doc.number | escape }}</strong></p>
+        <p>Data: <strong>{{ doc.date | escape }}</strong></p>
+        {% if doc.doc_type == 'invoice' %}
+        <p>Scadenza: <strong>{{ doc.due_date | escape }}</strong></p>
+        {% endif %}
+    </div>
+
+    <!-- 3. Line Items Table -->
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th class="col-desc">Descrizione</th>
+                <th class="col-qty">Q.tà</th>
+                <th class="col-price">Prezzo Unit.</th>
+                <th class="col-total">Totale</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- 'doc.items' is injected by the backend -->
+            {% for item in doc.items %}
+            <tr>
+                <td>{{ item.description | escape }}</td>
+                <td class="col-qty">{{ item.qty }}</td>
+                <!-- 'format' filter ensures 2 decimal places -->
+                <td class="col-price">{{ "%.2f"|format(item.unit_price) }} €</td>
+                <td class="col-total">{{ "%.2f"|format(item.total) }} €</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- 4. Totals Calculation Table -->
+    <table class="totals-table">
+        <tr>
+            <td class="label">Imponibile (Subtotale)</td>
+            <td class="value">{{ "%.2f"|format(doc.subtotal) }} €</td>
+        </tr>
+        <tr>
+            <td class="label">Sconto ({{ doc.discount_perc }} %)</td>
+            <td class="value">-{{ "%.2f"|format(doc.discount_amount) }} €</td>
+        </tr>
+        <tr>
+            <td class="label">Imponibile Netto</td>
+            <td class="value">{{ "%.2f"|format(doc.taxable_amount) }} €</td>
+        </tr>
+        <tr>
+            <td class="label">IVA ({{ doc.vat_perc }} %)</td>
+            <td class="value">+{{ "%.2f"|format(doc.vat_amount) }} €</td>
+        </tr>
+        <tr>
+            <td class="label">Totale Documento</td>
+            <td class="value">{{ "%.2f"|format(doc.total) }} €</td>
+        </tr>
+        <!-- Ritenuta section, only shown if applied (value > 0) -->
+        {% if doc.ritenuta_amount > 0 %}
+        <tr>
+            <td class="label">Ritenuta ({{ doc.ritenuta_perc }} %)</td>
+            <td class="value">-{{ "%.2f"|format(doc.ritenuta_amount) }} €</td>
+        </tr>
+        <tr class="grand-total">
+            <td class="label">TOTALE DA PAGARE</td>
+            <td class="value">{{ "%.2f"|format(doc.total_da_pagare) }} €</td>
+        </tr>
+        {% else %}
+        <!-- If no ritenuta, the grand total is the same as the document total -->
+        <tr class="grand-total">
+            <td class="label">TOTALE DA PAGARE</td>
+            <td class="value">{{ "%.2f"|format(doc.total) }} €</td>
+        </tr>
+        {% endif %}
+    </table>
+
+    <!-- 5. Footer Notes -->
+    <div class="footer-notes">
+        <strong>Note e Termini di Pagamento:</strong><br>
+        <!-- nl2br filter converts newlines to <br> tags -->
+        <p>{{ doc.notes | nl2br | escape }}</p>
+    </div>
+
+</body>
+</html>
