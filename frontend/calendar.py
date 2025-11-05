@@ -1,74 +1,85 @@
+import tkinter
 import tkinter.messagebox as tkmb
 import customtkinter as ctk
 from datetime import datetime, timedelta
-from backend import calendar as db_calendario, persistence as db, email_utils
+
+# Import backend logic
+from backend import calendar as db_calendario
+from backend import persistence as db
+from backend import email_utils
+
+# Import the base class
 from .page_base import PageBase
 
 class PaginaCalendario(PageBase):
-    """Gestione Calendario e Notifiche Email."""
-
+    """
+    Page for managing the Calendar and SMTP settings.
+    
+    This page shows upcoming events and allows configuration
+    and testing of email notifications.
+    """
     def __init__(self, master):
+        """
+        Initialize the Calendar page.
+        
+        Args:
+            master: The parent widget (main_content_frame from App).
+        """
         super().__init__(master, fg_color="transparent")
 
+        # --- Layout ---
+        # Column 0 = Actions/Config, Column 1 = Event List
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=2)
         self.grid_rowconfigure(0, weight=1)
-
-        # --- Colonna sinistra: azioni ---
-        frame_azioni = ctk.CTkFrame(self, corner_radius=10)
+        
+        # --- Column 0: Actions and Config ---
+        frame_azioni = ctk.CTkFrame(self)
         frame_azioni.grid(row=0, column=0, sticky="nsew", padx=(20, 10), pady=20)
         frame_azioni.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(frame_azioni, text="Calendario e Notifiche", font=ctk.CTkFont(size=18, weight="bold")).grid(
-            row=0, column=0, padx=15, pady=15, sticky="w"
-        )
-
-        ctk.CTkLabel(frame_azioni, text="Visualizza periodo:").grid(row=1, column=0, padx=15, pady=(10, 5), sticky="w")
-        for i, (label, days) in enumerate([
-            ("Oggi", 0),
-            ("Prossimi 7 giorni", 7),
-            ("Prossimi 30 giorni", 30),
-        ], start=2):
-            ctk.CTkButton(frame_azioni, text=label, command=lambda d=days: self.aggiorna_vista_eventi(d)).grid(
-                row=i, column=0, sticky="ew", padx=15, pady=5
-            )
+        ctk.CTkLabel(frame_azioni, text="Calendario e Notifiche", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, padx=15, pady=15, sticky="w")
+        
+        # --- Event View ---
+        ctk.CTkLabel(frame_azioni, text="Visualizza Periodo:").grid(row=1, column=0, padx=15, pady=(10,0), sticky="w")
+        
+        ctk.CTkButton(frame_azioni, text="Oggi", command=lambda: self.aggiorna_vista_eventi(0)).grid(row=2, column=0, sticky="ew", padx=15, pady=5)
+        ctk.CTkButton(frame_azioni, text="Prossimi 7 giorni", command=lambda: self.aggiorna_vista_eventi(7)).grid(row=3, column=0, sticky="ew", padx=15, pady=5)
+        ctk.CTkButton(frame_azioni, text="Prossimi 30 giorni", command=lambda: self.aggiorna_vista_eventi(30)).grid(row=4, column=0, sticky="ew", padx=15, pady=5)
 
         ctk.CTkFrame(frame_azioni, height=2, fg_color="gray").grid(row=5, column=0, sticky="ew", padx=10, pady=10)
-
-        ctk.CTkButton(frame_azioni, text="Aggiungi Evento Manuale", command=self.apri_popup_evento_manuale).grid(
-            row=6, column=0, sticky="ew", padx=15, pady=5
-        )
-        ctk.CTkButton(frame_azioni, text="Aggiorna Scadenze Automatiche", command=self.aggiorna_scadenze_auto).grid(
-            row=7, column=0, sticky="ew", padx=15, pady=5
-        )
-
+        
+        # --- Event Actions ---
+        ctk.CTkButton(frame_azioni, text="Aggiungi Evento Manuale", command=self.apri_popup_evento_manuale).grid(row=6, column=0, sticky="ew", padx=15, pady=5)
+        ctk.CTkButton(frame_azioni, text="Aggiorna Scadenze Automatiche", command=self.aggiorna_scadenze_auto).grid(row=7, column=0, sticky="ew", padx=15, pady=5)
+        
         ctk.CTkFrame(frame_azioni, height=2, fg_color="gray").grid(row=8, column=0, sticky="ew", padx=10, pady=10)
 
-        ctk.CTkLabel(frame_azioni, text="Configurazione Email", font=ctk.CTkFont(weight="bold")).grid(
-            row=9, column=0, padx=15, pady=10, sticky="w"
-        )
-        ctk.CTkButton(frame_azioni, text="Configura SMTP", command=self.apri_popup_config_smtp).grid(
-            row=10, column=0, sticky="ew", padx=15, pady=5
-        )
-        ctk.CTkButton(frame_azioni, text="Invia Email di Test", command=self.invia_test_email).grid(
-            row=11, column=0, sticky="ew", padx=15, pady=5
-        )
+        # --- Email Config ---
+        ctk.CTkLabel(frame_azioni, text="Configurazione Email", font=ctk.CTkFont(weight="bold")).grid(row=9, column=0, padx=15, pady=10, sticky="w")
+        
+        self.btn_config_smtp = ctk.CTkButton(frame_azioni, text="Configura SMTP", command=self.apri_popup_config_smtp)
+        self.btn_config_smtp.grid(row=10, column=0, sticky="ew", padx=15, pady=5)
+        
+        self.btn_test_email = ctk.CTkButton(frame_azioni, text="Invia Email di Test", command=self.invia_test_email)
+        self.btn_test_email.grid(row=11, column=0, sticky="ew", padx=15, pady=5)
 
-        # --- Colonna destra: eventi ---
-        frame_vista = ctk.CTkFrame(self, corner_radius=10)
+        # --- Column 1: Event List Display ---
+        frame_vista = ctk.CTkFrame(self)
         frame_vista.grid(row=0, column=1, sticky="nsew", padx=(10, 20), pady=20)
         frame_vista.grid_rowconfigure(1, weight=1)
         frame_vista.grid_columnconfigure(0, weight=1)
-
+        
         self.lbl_titolo_vista = ctk.CTkLabel(frame_vista, text="Scadenze", font=ctk.CTkFont(size=18, weight="bold"))
         self.lbl_titolo_vista.grid(row=0, column=0, padx=15, pady=15, sticky="w")
-
-        self.txt_eventi = ctk.CTkTextbox(frame_vista, font=ctk.CTkFont(size=13))
-        self.txt_eventi.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="nsew")
-        self.txt_eventi.configure(state="disabled")
+        
+        # --- CORREZIONE: Cambiato da Textbox a ScrollableFrame ---
+        self.frame_scroll_eventi = ctk.CTkScrollableFrame(frame_vista, fg_color="transparent")
+        self.frame_scroll_eventi.grid(row=1, column=0, padx=15, pady=(0, 15), sticky="nsew")
+        self.frame_scroll_eventi.grid_columnconfigure(0, weight=1)
+        # --- FINE CORREZIONE ---
 
         self.on_show()
-
 
     def on_show(self):
         """
@@ -82,7 +93,7 @@ class PaginaCalendario(PageBase):
     def aggiorna_vista_eventi(self, giorni):
         """
         Fetches events for the specified period and displays them
-        in the main textbox.
+        in the main scrollable frame.
         
         Args:
             giorni (int): 0 for today, 7 for 7 days, 30 for 30 days.
@@ -97,27 +108,40 @@ class PaginaCalendario(PageBase):
             end_date = start_date + timedelta(days=giorni)
             
         try:
+            # --- CORREZIONE: Logica di visualizzazione aggiornata ---
+            for widget in self.frame_scroll_eventi.winfo_children():
+                widget.destroy()
+
             eventi = db_calendario.get_eventi(start_date, end_date)
             
-            self.txt_eventi.configure(state="normal")
-            self.txt_eventi.delete("1.0", "end")
-            
             if not eventi:
-                self.txt_eventi.insert("1.0", "Nessun evento trovato per questo periodo.")
+                ctk.CTkLabel(self.frame_scroll_eventi, text="Nessun evento trovato per questo periodo.").pack(pady=10)
             else:
-                testo = ""
                 current_date_str = ""
                 for event in eventi:
-                    # Group events by date
+                    # Raggruppa per data
                     if event['date'] != current_date_str:
                         current_date_str = event['date']
-                        testo += f"\n--- {current_date_str} ---\n"
-                    testo += f"  • {event['title']}\n"
+                        ctk.CTkLabel(self.frame_scroll_eventi, text=f"--- {current_date_str} ---", font=ctk.CTkFont(weight="bold")).pack(fill="x", padx=5, pady=(10, 5))
+                    
+                    # Crea un frame per l'evento
+                    frame_evento = ctk.CTkFrame(self.frame_scroll_eventi, fg_color="transparent")
+                    frame_evento.pack(fill="x", padx=5)
+                    frame_evento.grid_columnconfigure(0, weight=1)
+
+                    testo_evento = f"• {event['title']}"
                     if event['description']:
-                        testo += f"    ({event['description']})\n"
-                self.txt_eventi.insert("1.0", testo.strip())
-                
-            self.txt_eventi.configure(state="disabled")
+                        testo_evento += f" ({event['description']})"
+                    
+                    ctk.CTkLabel(frame_evento, text=testo_evento, anchor="w").grid(row=0, column=0, sticky="w")
+                    
+                    # Aggiungi bottone Elimina solo per eventi manuali
+                    if event['type'] == 'manuale':
+                        btn_del = ctk.CTkButton(frame_evento, text="X", width=30, fg_color="#D32F2F", hover_color="#B71C1C",
+                                                command=lambda id=event['id']: self.elimina_evento_manuale(id))
+                        btn_del.grid(row=0, column=1, padx=(5,0))
+            # --- FINE CORREZIONE ---
+            
         except Exception as e:
             tkmb.showerror("Errore", f"Impossibile caricare il calendario: {e}")
 
@@ -175,6 +199,31 @@ class PaginaCalendario(PageBase):
         popup.transient(self) # Keep popup on top
         popup.grab_set() # Modal
         self.wait_window(popup) # Wait until popup is closed
+
+    def elimina_evento_manuale(self, event_id):
+        """
+        Deletes a manual event from the calendar.
+        (Nota: questa funzione non esiste nel backend, la aggiungiamo)
+        """
+        if not tkmb.askyesno("Conferma", "Vuoi eliminare questo evento manuale?"):
+            return
+        
+        try:
+            # --- Logica di eliminazione (mancante nel backend, la implementiamo qui) ---
+            # Questa è una scorciatoia. Idealmente, db_calendario dovrebbe avere
+            # una funzione 'delete_evento_manuale(event_id)'
+            events = db.load_data(db.CALENDARIO_DB)
+            new_events = [e for e in events if not (e.get('id') == event_id and e.get('type') == 'manuale')]
+            
+            if len(new_events) < len(events):
+                db.save_data(db.CALENDARIO_DB, new_events)
+                tkmb.showinfo("Successo", "Evento manuale eliminato.")
+                self.on_show()
+            else:
+                tkmb.showwarning("Errore", "Evento non trovato o non manuale.")
+            # --- Fine logica di eliminazione ---
+        except Exception as e:
+            tkmb.showerror("Errore", f"Impossibile eliminare l'evento: {e}")
 
     def apri_popup_config_smtp(self):
         """Opens a Toplevel window to configure SMTP settings."""
@@ -265,7 +314,7 @@ class PaginaCalendario(PageBase):
             subject = "Test dal Gestionale Python"
             body = "Se ricevi questa email, la configurazione SMTP funziona."
             
-            success, msg = utils_email.send_email(
+            success, msg = email_utils.send_email(
                 recipient_email=notify_email,
                 subject=subject,
                 body=body,

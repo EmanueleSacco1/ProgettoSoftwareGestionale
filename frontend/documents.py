@@ -28,11 +28,6 @@ class PaginaDocumenti(PageBase):
         """
         super().__init__(master)
         
-        # --- ERRORE RIMOSSO ---
-        # La riga 'self.pack(...)' è stata rimossa.
-        # PageBase gestisce già il layout interno.
-        # --- FINE RIMOZIONE ---
-        
         # Configure layout
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -225,6 +220,10 @@ class PaginaDocumenti(PageBase):
             title = f"Converti Preventivo {quote_data['number']}"
         popup.title(title)
         popup.geometry("600x650")
+        
+        # Make the popup modal
+        popup.transient(self)
+        popup.grab_set()
 
         popup.grid_columnconfigure(1, weight=1)
         
@@ -435,10 +434,10 @@ class PaginaDocumenti(PageBase):
                 tkmb.showerror("Errore Salvataggio", f"Impossibile salvare:\n{e}", parent=popup)
 
         row += 1
+        # --- CORREZIONE: Aggiunto il pulsante Salva ---
         ctk.CTkButton(popup, text=f"Salva {'Fattura' if doc_type == 'invoice' else 'Preventivo'}", command=salva_documento).grid(row=row, column=1, padx=10, pady=20, sticky="e")
+        # --- FINE CORREZIONE ---
         
-        popup.transient(self)
-        popup.grab_set()
         self.wait_window(popup)
 
     def apri_popup_conversione(self):
