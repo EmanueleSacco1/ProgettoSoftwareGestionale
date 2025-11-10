@@ -17,7 +17,8 @@ class PaginaDocumenti(PageBase):
     Page for managing Quotes (Preventivi) and Invoices (Fatture).
     
     This page uses a main CTkTabview to separate the two document types.
-    It contains logic for creating, listing, and exporting documents.
+    It contains logic for creating, listing, and exporting documents,
+    as well as converting quotes to invoices.
     """
     def __init__(self, master):
         """
@@ -34,13 +35,14 @@ class PaginaDocumenti(PageBase):
         
         ctk.CTkLabel(self, text="Gestione Documenti", font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=10, pady=10, sticky="w")
         
+        # Main TabView to separate Quotes and Invoices
         self.tab_view = ctk.CTkTabview(self)
         self.tab_view.grid(row=1, column=0, sticky="nsew")
         
         self.tab_preventivi = self.tab_view.add("Preventivi")
         self.tab_fatture = self.tab_view.add("Fatture")
         
-        # Keep track of the currently selected document
+        # Keep track of the currently selected document in each list
         self.selected_quote_id = None
         self.selected_invoice_id = None
         
@@ -60,16 +62,17 @@ class PaginaDocumenti(PageBase):
 
     def _crea_widgets_tab_documenti(self, tab, doc_type):
         """
-        Populates a given tab (Preventivi or Fatture) with its
-        necessary widgets (buttons, scrollable list).
+        Helper method to populate a given tab (Preventivi or Fatture) 
+        with its necessary widgets (buttons, scrollable list).
         
         Args:
-            tab (CTkFrame): The parent tab frame.
+            tab (CTkFrame): The parent tab frame (e.g., self.tab_preventivi).
             doc_type (str): 'quote' or 'invoice'.
         """
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_rowconfigure(1, weight=1)
         
+        # Frame for action buttons
         frame_azioni = ctk.CTkFrame(tab, fg_color="transparent")
         frame_azioni.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
 
@@ -79,6 +82,7 @@ class PaginaDocumenti(PageBase):
                                  command=lambda dt=doc_type: self.apri_popup_documento(doc_type=dt))
         btn_crea.pack(side="left", padx=5)
 
+        # Add invoice-specific buttons only to the invoice tab
         if doc_type == "invoice":
             btn_converti = ctk.CTkButton(frame_azioni, text="Crea Fattura da Preventivo",
                                          command=self.apri_popup_conversione)
@@ -107,11 +111,12 @@ class PaginaDocumenti(PageBase):
     def aggiorna_lista_documenti(self, doc_type):
         """
         Refreshes the list of documents (quotes or invoices) in the
-        specified tab's scrollable frame.
+        specified tab's scrollable frame by fetching data from the backend.
         
         Args:
             doc_type (str): 'quote' or 'invoice'.
         """
+        # Determine which frame and label dictionary to use
         if doc_type == "quote":
             frame_scroll = self.frame_scroll_preventivi
             self.labels_preventivi = {}
@@ -121,22 +126,25 @@ class PaginaDocumenti(PageBase):
             self.labels_fatture = {}
             self.selected_invoice_id = None
         
+        # Clear existing widgets
         for widget in frame_scroll.winfo_children():
             widget.destroy()
             
         try:
+            # Fetch all documents of the specified type
             documenti = db_docs.get_all_documents(doc_type=doc_type)
-            # Load client data once for efficiency
+            # Load client data once for efficiency (to avoid N+1 queries)
             clienti = {c['id']: c for c in db_rubrica.get_all_contacts()}
             
             if not documenti:
                 ctk.CTkLabel(frame_scroll, text=f"Nessun{'a' if doc_type == 'invoice' else 'o'} {'Fattura' if doc_type == 'invoice' else 'Preventivo'} trovat{'a' if doc_type == 'invoice' else 'o'}.").pack(pady=10)
                 return
 
+            # Sort by date (newest first) and create labels
             for doc in sorted(documenti, key=lambda x: x['date'], reverse=True):
                 cliente = clienti.get(doc['client_id'], {'name': 'CLIENTE ELIMINATO'})
                 
-                # Determine the total to display
+                # Invoices may have a 'total_da_pagare' (total to be paid), otherwise use 'total'
                 total = doc.get('total_da_pagare', doc.get('total', 0))
                 
                 testo = f"[{doc['date']}] {doc['number']} - {cliente['name']} - {total:.2f} € ({doc['status']})"
@@ -144,9 +152,10 @@ class PaginaDocumenti(PageBase):
                 # Create a clickable label for each document
                 lbl = ctk.CTkLabel(frame_scroll, text=testo, anchor="w", cursor="hand2")
                 lbl.pack(fill="x", padx=5, pady=3)
+                # Bind click event to the selection function
                 lbl.bind("<Button-1>", lambda e, dt=doc_type, doc_id=doc['id']: self.seleziona_documento(dt, doc_id))
                 
-                # Store the label reference
+                # Store the label reference for highlighting
                 if doc_type == "quote":
                     self.labels_preventivi[doc['id']] = lbl
                 else:
@@ -158,7 +167,7 @@ class PaginaDocumenti(PageBase):
     def seleziona_documento(self, doc_type, doc_id):
         """
         Handles the click event on a document label.
-        Highlights the selected document.
+        Highlights the selected document and stores its ID.
         
         Args:
             doc_type (str): 'quote' or 'invoice'.
@@ -171,21 +180,22 @@ class PaginaDocumenti(PageBase):
             self.selected_invoice_id = doc_id
             labels_dict = self.labels_fatture
             
-        # Reset all labels to default color
+        # Reset all labels in this list to default color
         for lbl in labels_dict.values():
             lbl.configure(fg_color="transparent")
             
-        # Highlight the selected label
+        # Highlight the newly selected label
         if doc_id in labels_dict:
             labels_dict[doc_id].configure(fg_color=ctk.ThemeManager.theme["CTkButton"]["fg_color"])
 
     def esporta_pdf_selezionato(self, doc_type):
         """
-        Exports the currently selected document to PDF.
+        Exports the currently selected document to PDF by calling the backend.
         
         Args:
             doc_type (str): 'quote' or 'invoice' to determine which ID to use.
         """
+        # Get the correct ID based on the active tab
         doc_id = self.selected_quote_id if doc_type == "quote" else self.selected_invoice_id
         
         if not doc_id:
@@ -194,10 +204,11 @@ class PaginaDocumenti(PageBase):
 
         try:
             print(f"Generazione PDF per {doc_id}...")
+            # Call backend function
             success, msg = db_docs.export_to_pdf(doc_id)
             if success:
                 tkmb.showinfo("Successo", f"PDF generato con successo:\n{os.path.abspath(msg)}")
-                os.startfile(os.path.dirname(msg)) # Open the folder
+                os.startfile(os.path.dirname(msg)) # Open the folder containing the PDF
             else:
                 tkmb.showerror("Errore PDF", f"Impossibile generare il PDF:\n{msg}")
         except Exception as e:
@@ -207,12 +218,13 @@ class PaginaDocumenti(PageBase):
     
     def apri_popup_documento(self, doc_type, quote_data=None):
         """
-        Opens a Toplevel window to create a new Quote or Invoice.
+        Opens a modal Toplevel window to create a new Quote or Invoice.
         
         Args:
             doc_type (str): 'quote' or 'invoice'.
             quote_data (dict, optional): If provided, pre-fills the form
-                                         (used for quote-to-invoice conversion).
+                                         with data from a quote. This is used 
+                                         for quote-to-invoice conversion.
         """
         popup = ctk.CTkToplevel(self)
         title = "Nuovo Preventivo" if doc_type == "quote" else "Nuova Fattura"
@@ -221,7 +233,7 @@ class PaginaDocumenti(PageBase):
         popup.title(title)
         popup.geometry("600x650")
         
-        # Make the popup modal
+        # Make the popup modal (blocks interaction with main window)
         popup.transient(self)
         popup.grab_set()
 
@@ -232,10 +244,10 @@ class PaginaDocumenti(PageBase):
         ctk.CTkLabel(popup, text="Cliente*").grid(row=row, column=0, padx=10, pady=10, sticky="w")
         
         try:
+            # Load all contacts of type 'Cliente'
             clienti = db_rubrica.get_all_contacts()
-            # Create a display-friendly list: "Name (Company)"
             clienti_options = [f"{c['name']} ({c.get('company', 'N/A')})" for c in clienti if c.get('type') == 'Cliente']
-            # Map the display string back to the client ID
+            # Map the display string back to the client ID for saving
             clienti_map = {f"{c['name']} ({c.get('company', 'N/A')})": c['id'] for c in clienti if c.get('type') == 'Cliente'}
             
             if not clienti_options:
@@ -247,12 +259,13 @@ class PaginaDocumenti(PageBase):
             combo_clienti.grid(row=row, column=1, padx=10, pady=10, sticky="ew")
             
             if quote_data:
-                # Pre-select client from quote
+                # If converting, pre-select the client from the quote
                 client = db_rubrica.find_contact_by_id(quote_data['client_id'])
                 if client:
                     client_str = f"{client['name']} ({client.get('company', 'N/A')})"
                     combo_clienti.set(client_str)
-                combo_clienti.configure(state="disabled") # Don't allow changing client on conversion
+                # Disable client selection during conversion
+                combo_clienti.configure(state="disabled") 
 
         except Exception as e:
             tkmb.showerror("Errore", f"Impossibile caricare i clienti: {e}", parent=popup)
@@ -273,12 +286,16 @@ class PaginaDocumenti(PageBase):
         frame_voci = ctk.CTkScrollableFrame(popup, height=200)
         frame_voci.grid(row=row+1, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
         
-        line_items = [] # This list will hold all item data dicts
+        # This list holds dictionaries, each representing a line item's widgets and data
+        line_items = [] 
 
         def aggiungi_voce(voce=None):
             """
-            Adds a new line item row to the scrollable frame.
-            If 'voce' is provided, pre-fills it (for quote conversion).
+            Nested function to add a new line item row to the scrollable frame.
+            If 'voce' is provided, pre-fills the row (used for quote conversion).
+            
+            Args:
+                voce (dict, optional): A line item dictionary from a quote.
             """
             item_frame = ctk.CTkFrame(frame_voci, fg_color="transparent")
             item_frame.pack(fill="x", pady=2)
@@ -295,7 +312,7 @@ class PaginaDocumenti(PageBase):
             btn_del = ctk.CTkButton(item_frame, text="X", width=30, fg_color="#D32F2F", hover_color="#B71C1C")
             btn_del.pack(side="left", padx=5)
             
-            linked_item_id = None # Store the warehouse item ID
+            linked_item_id = None # Stores the warehouse item ID if linked
             
             if voce:
                 # Pre-fill from quote_data
@@ -303,40 +320,41 @@ class PaginaDocumenti(PageBase):
                 entry_qty.insert(0, str(voce.get('qty', '1')))
                 entry_prezzo.insert(0, str(voce.get('unit_price', '0')))
                 linked_item_id = voce.get('articolo_id')
-                # Disable fields if converting
+                # Disable fields if converting (items can't be changed)
                 entry_desc.configure(state="disabled")
                 entry_qty.configure(state="disabled")
                 entry_prezzo.configure(state="disabled")
                 btn_del.configure(state="disabled")
             else:
+                # Default quantity for new items
                 entry_qty.insert(0, "1")
 
-            # Store references to the widgets and data
+            # Store references to the widgets and data for this row
             item_data = {'frame': item_frame, 'desc': entry_desc, 'qty': entry_qty, 'prezzo': entry_prezzo, 'articolo_id': linked_item_id}
             
-            # Add command *after* creating item_data
+            # Add command *after* creating item_data so the lambda captures it
             btn_del.configure(command=lambda d=item_data: rimuovi_voce(d))
             line_items.append(item_data)
 
         def rimuovi_voce(item_data):
-            """Removes a line item from the list and destroys its frame."""
+            """Nested function to remove a line item from the list and destroy its frame."""
             item_data['frame'].destroy()
             line_items.remove(item_data)
 
         if quote_data:
-            # Pre-fill all items from the quote
+            # If converting, pre-fill all items from the quote
             for item in quote_data['items']:
                 aggiungi_voce(item)
         else:
-            # Add one blank row
+            # If new, add one blank row to start
             aggiungi_voce()
             
-        # Add "Add Row" button only if not converting
+        # Add "Add Row" button only if this is not a conversion
         if not quote_data:
             btn_add_voce = ctk.CTkButton(popup, text="+ Aggiungi Voce", command=aggiungi_voce)
             btn_add_voce.grid(row=row+2, column=1, padx=10, pady=5, sticky="w")
 
-        # --- Financial Fields ---
+        # --- Financial Fields (Discount, VAT, etc.) ---
         row += 3
         frame_fin = ctk.CTkFrame(popup, fg_color="transparent")
         frame_fin.grid(row=row, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
@@ -353,12 +371,13 @@ class PaginaDocumenti(PageBase):
         entry_iva.grid(row=0, column=3, padx=5, pady=5, sticky="w")
         entry_iva.insert(0, str(quote_data.get('vat_perc', '22')))
         
-        # Ritenuta (Invoices only)
+        # Withholding Tax (Ritenuta) - Invoices only
         if doc_type == "invoice":
             ctk.CTkLabel(frame_fin, text="Ritenuta (%)").grid(row=1, column=0, padx=5, pady=5, sticky="w")
             entry_ritenuta = ctk.CTkEntry(frame_fin, width=80)
             entry_ritenuta.grid(row=1, column=1, padx=5, pady=5, sticky="w")
-            entry_ritenuta.insert(0, "0") # Ritenuta is always 0 on quotes
+            # Ritenuta is always 0 on quotes, so default to 0 even if converting
+            entry_ritenuta.insert(0, "0") 
 
         # --- Notes ---
         row += 1
@@ -368,9 +387,12 @@ class PaginaDocumenti(PageBase):
         if quote_data:
             entry_note.insert(0, quote_data.get('notes', ''))
 
-        # --- Save Button ---
+        # --- Save Button Callback ---
         def salva_documento():
-            """Callback to save the document."""
+            """
+            Nested callback function to validate all form data and 
+            call the backend to save the document.
+            """
             try:
                 # 1. Get Client ID
                 client_id = clienti_map[combo_clienti.get()]
@@ -382,7 +404,7 @@ class PaginaDocumenti(PageBase):
                         'description': item_row['desc'].get(),
                         'qty': Decimal(item_row['qty'].get()),
                         'unit_price': Decimal(item_row['prezzo'].get()),
-                        'articolo_id': item_row['articolo_id']
+                        'articolo_id': item_row['articolo_id'] # Pass linked item ID
                     })
                 if not items_data:
                     tkmb.showwarning("Dati Mancanti", "Aggiungere almeno una voce.", parent=popup)
@@ -395,7 +417,7 @@ class PaginaDocumenti(PageBase):
                     'notes': entry_note.get()
                 }
 
-                # 4. Call correct backend function
+                # 4. Call correct backend function based on doc_type
                 if doc_type == 'invoice':
                     dati_fin['ritenuta_perc'] = Decimal(entry_ritenuta.get() or '0')
                     dati_fin['due_date'] = entry_scadenza.get()
@@ -404,7 +426,7 @@ class PaginaDocumenti(PageBase):
                          return
                          
                     if quote_data:
-                        # This is a conversion
+                        # This is a CONVERSION from a quote
                         success, result = db_docs.convert_quote_to_invoice(
                             quote_id=quote_data['id'],
                             due_date=dati_fin['due_date'],
@@ -412,21 +434,22 @@ class PaginaDocumenti(PageBase):
                         )
                         if not success: raise Exception(result)
                     else:
-                        # This is a new manual invoice
+                        # This is a NEW manual invoice
                         db_docs.create_invoice(
                             client_id=client_id, project_id=None, # TODO: add project link
                             items=items_data, **dati_fin
                         )
                 
                 else: # doc_type == 'quote'
+                    # This is a NEW quote
                     db_docs.create_quote(
                         client_id=client_id, project_id=None, # TODO: add project link
                         items=items_data, **dati_fin
                     )
                 
                 tkmb.showinfo("Successo", f"{title} salvat{'a' if doc_type == 'invoice' else 'o'}.", parent=popup)
-                popup.destroy()
-                self.on_show() # Refresh lists
+                popup.destroy() # Close the popup
+                self.on_show() # Refresh lists on main page
 
             except InvalidOperation:
                 tkmb.showerror("Errore Formato", "Controlla che tutti i campi (Q.tà, Prezzo, %, ...) siano numeri validi.", parent=popup)
@@ -434,14 +457,17 @@ class PaginaDocumenti(PageBase):
                 tkmb.showerror("Errore Salvataggio", f"Impossibile salvare:\n{e}", parent=popup)
 
         row += 1
-        # --- CORREZIONE: Aggiunto il pulsante Salva ---
+        # --- Save Button ---
         ctk.CTkButton(popup, text=f"Salva {'Fattura' if doc_type == 'invoice' else 'Preventivo'}", command=salva_documento).grid(row=row, column=1, padx=10, pady=20, sticky="e")
-        # --- FINE CORREZIONE ---
         
+        # Wait for the popup to be closed before returning
         self.wait_window(popup)
 
     def apri_popup_conversione(self):
-        """Opens a popup to select a Quote to convert into an Invoice."""
+        """
+        Opens a small popup to select a valid (non-converted) 
+        Quote to convert into an Invoice.
+        """
         
         # 1. Create selection popup
         popup = ctk.CTkToplevel(self)
@@ -451,10 +477,11 @@ class PaginaDocumenti(PageBase):
         ctk.CTkLabel(popup, text="Seleziona il preventivo da convertire:").pack(pady=10)
         
         try:
-            # Filter for quotes that are not already 'Fatturato'
+            # Filter for quotes that are not already 'Fatturato' (Invoiced)
             quotes = [q for q in db_docs.get_all_documents(doc_type='quote') if q['status'] != 'Fatturato']
             clienti = {c['id']: c for c in db_rubrica.get_all_contacts()}
             
+            # Create display strings and a map to get the full quote object back
             quote_options = [f"{q['number']} - {clienti.get(q['client_id'], {'name': 'N/A'})['name']}" for q in quotes]
             quote_map = {f"{q['number']} - {clienti.get(q['client_id'], {'name': 'N/A'})['name']}": q for q in quotes}
 
@@ -471,15 +498,16 @@ class PaginaDocumenti(PageBase):
             return
 
         def on_next():
-            """Called when user selects a quote and clicks Next."""
+            """Nested callback for when user selects a quote and clicks 'Avanti'."""
             quote_str = combo_quotes.get()
             if not quote_str:
                 tkmb.showwarning("Selezione Mancante", "Seleziona un preventivo.", parent=popup)
                 return
             
+            # Get the full quote data from the map
             quote_data = quote_map[quote_str]
-            popup.destroy() # Close this popup
-            # Open the main document popup, pre-filled
+            popup.destroy() # Close this selection popup
+            # Open the main document popup, pre-filled with the quote data
             self.apri_popup_documento(doc_type="invoice", quote_data=quote_data)
 
         ctk.CTkButton(popup, text="Avanti", command=on_next).pack(pady=20)
@@ -489,11 +517,15 @@ class PaginaDocumenti(PageBase):
         self.wait_window(popup)
     
     def apri_popup_aggiorna_stato(self):
-        """Opens a popup to change the status of the selected invoice."""
+        """
+        Opens a popup to change the payment status (e.g., 'Da Pagare' -> 'Pagato')
+        of the currently selected invoice.
+        """
         if not self.selected_invoice_id:
             tkmb.showwarning("Nessuna Selezione", "Seleziona una fattura dalla lista.")
             return
 
+        # Get the full invoice data
         invoice = db_docs.find_document_by_id(self.selected_invoice_id)
         
         popup = ctk.CTkToplevel(self)
@@ -502,17 +534,20 @@ class PaginaDocumenti(PageBase):
         
         ctk.CTkLabel(popup, text="Seleziona nuovo stato:").pack(pady=10)
         
+        # Populate combobox with valid statuses from the backend
         combo_stati = ctk.CTkComboBox(popup, values=db_docs.VALID_INVOICE_STATUS)
-        combo_stati.set(invoice['status'])
+        combo_stati.set(invoice['status']) # Set current status as default
         combo_stati.pack(pady=5, padx=20, fill="x")
         
         def salva_stato():
-            """Callback to save the new status."""
+            """Nested callback to save the new status."""
             new_status = combo_stati.get()
             try:
+                # Call backend to update
                 db_docs.update_document_status(self.selected_invoice_id, new_status)
                 tkmb.showinfo("Successo", "Stato aggiornato.", parent=popup)
                 popup.destroy()
+                # Refresh the invoice list to show the change
                 self.aggiorna_lista_documenti("invoice")
             except Exception as e:
                 tkmb.showerror("Errore", f"Impossibile aggiornare lo stato:\n{e}", parent=popup)

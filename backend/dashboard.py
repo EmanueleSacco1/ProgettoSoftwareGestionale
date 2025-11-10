@@ -10,7 +10,7 @@ from . import projects as db_progetti
 from . import documents as db_docs
 from . import calendar as db_calendario
 from . import ledger as db_ledger
-from . import time_reports as db_reporting
+from . import time_reports as db_reporting # time_reports.py was not provided, but is imported
 
 # Import PDF generation tools from reportlab
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -21,7 +21,7 @@ from reportlab.lib.units import cm
 
 # --- Dashboard UI Functions ---
 
-def get_dashboard_data(): # <-- FUNZIONE RINOMINATA
+def get_dashboard_data():
     """
     Fetches all data points required for the main dashboard UI.
     This function reads from multiple backend modules to create a summary.
@@ -32,25 +32,25 @@ def get_dashboard_data(): # <-- FUNZIONE RINOMINATA
     today = datetime.now().date()
     current_year = today.year
     
-    # 1. Active Projects
+    # 1. Get all projects with status "In corso"
     progetti_attivi = db_progetti.get_all_projects(status_filter="In corso")
     
-    # 2. Unpaid Invoices
+    # 2. Get all invoices and filter for unpaid ones
     fatture = db_docs.get_all_documents(doc_type='invoice')
     fatture_da_incassare = []
     totale_da_incassare = Decimal('0')
     for f in fatture:
         if f.get('status') in ['In sospeso', 'Scaduto']:
             fatture_da_incassare.append(f)
-            # Use 'total_da_pagare' which includes Ritenuta
+            # Use 'total_da_pagare' which includes withholding tax (Ritenuta)
             totale_da_incassare += f.get('total_da_pagare', Decimal('0'))
             
-    # 3. Upcoming Deadlines (Next 7 days)
+    # 3. Get upcoming deadlines for the next 7 days
     end_date = today + timedelta(days=7)
     scadenze_imminenti = db_calendario.get_eventi(today, end_date)
     
-    # 4. Earning Statistics (Cash basis, Year-To-Date)
-    # Use the internal _get_dataframe helper from the ledger
+    # 4. Calculate Earning Statistics (Cash basis, Year-To-Date)
+    # Use the internal _get_dataframe helper from the ledger module
     df_movimenti, _ = db_ledger._get_dataframe(current_year)
     incassato_ytd = Decimal('0')
     uscite_ytd = Decimal('0')
@@ -63,7 +63,7 @@ def get_dashboard_data(): # <-- FUNZIONE RINOMINATA
             df_movimenti[df_movimenti['type'] == 'Uscita']['amount_totale'].sum()
         ))
 
-    # Assemble the final dictionary
+    # Assemble the final dictionary for the UI
     return {
         'progetti_attivi_count': len(progetti_attivi),
         'progetti_attivi_list': progetti_attivi[:5], # Show only the first 5
@@ -80,6 +80,7 @@ def get_dashboard_data(): # <-- FUNZIONE RINOMINATA
 def _get_report_dataframes(year):
     """
     Helper function to get all data for the annual report as Pandas DataFrames.
+    It fetches, filters, and formats data for invoices, ledger movements, and time tracking.
 
     Args:
         year (int): The year to report on.
@@ -89,8 +90,10 @@ def _get_report_dataframes(year):
     """
     # 1. Invoice Data
     fatture_anno = []
+    # Create a lookup map for client names to avoid repeated DB calls
     client_names = {c['id']: c.get('name', 'N/A') for c in db_rubrica.get_all_contacts()}
     
+    # Filter all invoices by year
     for doc in db_docs.get_all_documents(doc_type='invoice'):
         try:
             if datetime.strptime(doc['date'], '%Y-%m-%d').year == year:
@@ -111,12 +114,12 @@ def _get_report_dataframes(year):
             'vat_amount': 'IVA', 'ritenuta_amount': 'Ritenuta',
             'total_da_pagare': 'Netto a Pagare'
         })
-        # Convert Decimal to float for Pandas
+        # Convert Decimal to float for Pandas compatibility
         for col in ['Imponibile', 'IVA', 'Ritenuta', 'Netto a Pagare']:
             df_fatture[col] = df_fatture[col].astype(float)
 
     # 2. Financial Ledger (Ledger) Data
-    df_movimenti, _ = db_ledger._get_dataframe(year) # This helper already returns a DF
+    df_movimenti, _ = db_ledger._get_dataframe(year) # This helper already filters by year
     if not df_movimenti.empty:
         df_movimenti = df_movimenti.reset_index()[[
             'date', 'type', 'description', 'amount_netto', 'amount_iva', 
@@ -156,6 +159,7 @@ def _export_to_excel(dataframes, filename):
         tuple (bool, str): (True, "Success message") or (False, "Error message").
     """
     try:
+        # Use ExcelWriter to save multiple sheets in one file
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
             if 'fatture' in dataframes and not dataframes['fatture'].empty:
                 dataframes['fatture'].to_excel(writer, sheet_name='Riepilogo Fatture', index=False)
@@ -163,14 +167,14 @@ def _export_to_excel(dataframes, filename):
                 dataframes['movimenti'].to_excel(writer, sheet_name='Riepilogo Movimenti', index=False)
             if 'ore' in dataframes and not dataframes['ore'].empty:
                 dataframes['ore'].to_excel(writer, sheet_name='Dettaglio Ore', index=False)
-        return True, f"Report Excel salvato come {filename}"
+        return True, f"Report Excel saved as {filename}"
     except Exception as e:
-        return False, f"Errore durante l'esportazione Excel: {e}"
+        return False, f"Error during Excel export: {e}"
 
 def _export_to_pdf(dataframes, filename, year):
     """
     Exports data to a multi-page PDF using ReportLab Platypus tables.
-    This is a simple, non-template-based PDF for raw data.
+    This creates a simple, data-driven PDF without a complex template.
 
     Args:
         dataframes (dict): The dict of DataFrames from _get_report_dataframes.
@@ -182,13 +186,13 @@ def _export_to_pdf(dataframes, filename, year):
     """
     try:
         doc = SimpleDocTemplate(filename, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
-        story = [] # A list of ReportLab 'Flowables'
+        story = [] # A list of ReportLab 'Flowables' (e.g., Paragraphs, Tables)
         styles = getSampleStyleSheet()
         
-        story.append(Paragraph(f"Report Annuale {year}", styles['h1']))
+        story.append(Paragraph(f"Annual Report {year}", styles['h1']))
         story.append(Spacer(1, 1*cm))
 
-        # Define a generic table style
+        # Define a generic table style for all tables
         table_style = TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -206,9 +210,9 @@ def _export_to_pdf(dataframes, filename, year):
 
         # Table 1: Invoices
         if 'fatture' in dataframes and not dataframes['fatture'].empty:
-            story.append(Paragraph("Riepilogo Fatture Emesse", styles['h2']))
+            story.append(Paragraph("Issued Invoices Summary", styles['h2']))
             df = dataframes['fatture'].head(50) # Limit to 50 rows for PDF
-            data = [df.columns.values.tolist()] + df.values.tolist()
+            data = [df.columns.values.tolist()] + df.values.tolist() # Convert DF to list of lists
             t = Table(data, colWidths=[2.5*cm, 2.5*cm, 3*cm, 2*cm, 2*cm, 2*cm, 2*cm, 2.5*cm])
             t.setStyle(table_style)
             story.append(t)
@@ -216,7 +220,7 @@ def _export_to_pdf(dataframes, filename, year):
 
         # Table 2: Financial Ledger
         if 'movimenti' in dataframes and not dataframes['movimenti'].empty:
-            story.append(Paragraph("Riepilogo Movimenti", styles['h2']))
+            story.append(Paragraph("Ledger Movements Summary", styles['h2']))
             df = dataframes['movimenti'].head(50) # Limit to 50 rows
             data = [df.columns.values.tolist()] + df.values.tolist()
             t = Table(data, colWidths=[2.5*cm, 1.5*cm, 5*cm, 2*cm, 2*cm, 2*cm, 2.5*cm])
@@ -226,7 +230,7 @@ def _export_to_pdf(dataframes, filename, year):
 
         # Table 3: Time Tracking
         if 'ore' in dataframes and not dataframes['ore'].empty:
-            story.append(Paragraph("Riepilogo Ore Lavorate", styles['h2']))
+            story.append(Paragraph("Time Tracking Summary", styles['h2']))
             df = dataframes['ore'].head(50) # Limit to 50 rows
             data = [df.columns.values.tolist()] + df.values.tolist()
             t = Table(data, colWidths=[2.5*cm, 3*cm, 3*cm, 1.5*cm, 2*cm, 6.5*cm])
@@ -235,17 +239,17 @@ def _export_to_pdf(dataframes, filename, year):
             story.append(Spacer(1, 1*cm))
 
         if len(story) <= 2: # Only titles were added
-            return False, "Nessun dato trovato per il PDF."
+            return False, "No data found to generate PDF."
 
-        doc.build(story)
-        return True, f"Report PDF salvato come {filename}"
+        doc.build(story) # Compile the story into a PDF
+        return True, f"PDF Report saved as {filename}"
     except Exception as e:
-        return False, f"Errore durante l'esportazione PDF: {e}"
+        return False, f"Error during PDF export: {e}"
 
 def export_report_completo(year, format='excel'):
     """
-    Main export function. Fetches all data and calls the
-    correct exporter (Excel or PDF).
+    Main export function called by the frontend.
+    Fetches all data and calls the correct exporter (Excel or PDF).
 
     Args:
         year (int): The year to report on.
@@ -254,19 +258,20 @@ def export_report_completo(year, format='excel'):
     Returns:
         tuple (bool, str): (True, "Success message") or (False, "Error message").
     """
-    print(f"Recupero dati per l'anno {year}...")
+    print(f"Retrieving data for year {year}...")
     dataframes = _get_report_dataframes(year)
     
+    # Check if all dataframes are empty
     if (dataframes['fatture'].empty and 
         dataframes['movimenti'].empty and 
         dataframes['ore'].empty):
-        return False, f"Nessun dato trovato per l'anno {year}."
+        return False, f"No data found for year {year}."
         
     if format == 'excel':
-        filename = f"report_annuale_{year}.xlsx"
+        filename = f"annual_report_{year}.xlsx"
         return _export_to_excel(dataframes, filename)
     elif format == 'pdf':
-        filename = f"report_annuale_{year}.pdf"
+        filename = f"annual_report_{year}.pdf"
         return _export_to_pdf(dataframes, filename, year)
     else:
-        return False, "Formato non valido."
+        return False, "Invalid format specified."

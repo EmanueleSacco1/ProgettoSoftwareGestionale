@@ -10,11 +10,21 @@ from . import persistence as db
 from . import documents as db_docs
 
 def _get_movimenti():
-    """Helper to load all financial transactions."""
+    """
+    Helper to load all financial transactions from the database.
+    
+    Returns:
+        list: A list of all transaction dictionaries.
+    """
     return db.load_data(db.PRIMANOTA_DB)
 
 def _save_movimenti(movimenti):
-    """Helper to save all financial transactions."""
+    """
+    Helper to save all financial transactions to the database.
+    
+    Args:
+        movimenti (list): The complete list of transactions to save.
+    """
     db.save_data(db.PRIMANOTA_DB, movimenti)
 
 def create_movimento(data):
@@ -30,10 +40,10 @@ def create_movimento(data):
         tuple (bool, str): (True, "Success message") or (False, "Error message").
     """
     try:
-        # Ensure correct types
+        # Ensure correct types, especially Decimals
         movimento = {
             'id': str(uuid.uuid4()),
-            'date': data['date'], # YYYY-MM-DD
+            'date': data['date'], # Expects 'YYYY-MM-DD'
             'type': data['type'],
             'description': data['description'],
             'amount_netto': Decimal(str(data.get('amount_netto', '0'))),
@@ -44,14 +54,14 @@ def create_movimento(data):
             'notes': data.get('notes', '')
         }
     except InvalidOperation as e:
-        return False, f"Errore nei dati numerici: {e}"
+        return False, f"Error in numerical data: {e}"
     except Exception as e:
-        return False, f"Errore nella validazione dei dati: {e}"
+        return False, f"Error validating data: {e}"
 
     movimenti = _get_movimenti()
     movimenti.append(movimento)
     _save_movimenti(movimenti)
-    return True, "Movimento registrato con successo."
+    return True, "Transaction recorded successfully."
 
 def create_movimento_from_invoice(invoice_id, payment_date):
     """
@@ -68,27 +78,27 @@ def create_movimento_from_invoice(invoice_id, payment_date):
     # 1. Find the invoice
     invoice = db_docs.find_document_by_id(invoice_id)
     if not invoice:
-        return False, "Fattura non trovata."
+        return False, "Invoice not found."
     if invoice['status'] == 'Pagato':
-        return False, "Fattura già registrata come pagata."
+        return False, "Invoice is already marked as paid."
         
-    # 2. Update invoice status
+    # 2. Update invoice status to 'Pagato'
     success, _ = db_docs.update_document_status(invoice_id, 'Pagato')
     if not success:
-        return False, "Errore nell'aggiornamento dello stato fattura."
+        return False, "Error updating invoice status."
 
     # 3. Create the linked transaction
     movimento_data = {
         'date': payment_date,
         'type': 'Entrata',
-        'description': f"Incasso Fattura N. {invoice['number']}",
+        'description': f"Payment for Invoice N. {invoice['number']}",
         'amount_netto': invoice['taxable_amount'],
         'amount_iva': invoice['vat_amount'],
         'amount_ritenuta': invoice.get('ritenuta_amount', Decimal('0')),
         # The amount received is the 'total_da_pagare'
         'amount_totale': invoice.get('total_da_pagare', invoice['total']), 
         'linked_invoice_id': invoice_id,
-        'notes': f"Rif. Cliente ID: {invoice['client_id']}"
+        'notes': f"Ref. Client ID: {invoice['client_id']}"
     }
     
     return create_movimento(movimento_data)
@@ -108,6 +118,7 @@ def delete_movimento(movimento_id):
     movimento_found = None
     new_movimenti = []
     
+    # Find the movement and rebuild the list without it
     for m in movimenti:
         if m['id'] == movimento_id:
             movimento_found = m
@@ -115,9 +126,9 @@ def delete_movimento(movimento_id):
             new_movimenti.append(m)
             
     if not movimento_found:
-        return False, "Movimento non trovato."
+        return False, "Transaction not found."
         
-    # If linked, reset invoice status to 'In sospeso'
+    # If the transaction was linked to an invoice, reset the invoice status
     linked_id = movimento_found.get('linked_invoice_id')
     if linked_id:
         try:
@@ -127,11 +138,11 @@ def delete_movimento(movimento_id):
             print(f"Warning: could not reset invoice {linked_id}. {e}")
 
     _save_movimenti(new_movimenti)
-    return True, "Movimento eliminato."
+    return True, "Transaction deleted."
 
 def get_movimenti(start_date, end_date):
     """
-    Gets all transactions within a date range.
+    Gets all transactions within a specific date range.
 
     Args:
         start_date (datetime.date): The start of the date range.
@@ -151,6 +162,7 @@ def get_movimenti(start_date, end_date):
         except ValueError:
             continue
             
+    # Sort by date before returning
     return sorted(results, key=lambda x: x['date'])
 
 def _get_dataframe(year):
@@ -166,11 +178,11 @@ def _get_dataframe(year):
     """
     movimenti = _get_movimenti()
     if not movimenti:
-        return pd.DataFrame(columns=['date']), "Nessun movimento trovato."
+        return pd.DataFrame(columns=['date']), "No transactions found."
         
     df = pd.DataFrame(movimenti)
     
-    # Convert types for pandas
+    # Convert types for pandas analysis
     df['date'] = pd.to_datetime(df['date'])
     for col in ['amount_netto', 'amount_iva', 'amount_ritenuta', 'amount_totale']:
         # Convert Decimal to float
@@ -179,10 +191,10 @@ def _get_dataframe(year):
     # Filter by year
     df_year = df[df['date'].dt.year == year].copy()
     if df_year.empty:
-        return pd.DataFrame(columns=['date']), f"Nessun movimento trovato per l'anno {year}."
+        return pd.DataFrame(columns=['date']), f"No transactions found for year {year}."
         
-    df_year.set_index('date', inplace=True)
-    return df_year, "Dati caricati."
+    df_year.set_index('date', inplace=True) # Set date as index for time-series analysis
+    return df_year, "Data loaded."
 
 def generate_monthly_stats(year):
     """
@@ -198,20 +210,20 @@ def generate_monthly_stats(year):
     if df.empty:
         return pd.DataFrame(), msg
 
-    # Resample by Month End ('ME') and sum
+    # Resample by Month End ('ME') and sum the 'amount_totale'
     entrate = df[df['type'] == 'Entrata']['amount_totale'].resample('ME').sum()
     uscite = df[df['type'] == 'Uscita']['amount_totale'].resample('ME').sum()
     
     # Combine, rename, and clean
     stats_df = pd.DataFrame({'Entrate': entrate, 'Uscite': uscite})
     stats_df.index.name = 'Mese'
-    stats_df.index = stats_df.index.strftime('%Y-%m') # Format index
-    stats_df = stats_df.fillna(0) # Replace NaN with 0
+    stats_df.index = stats_df.index.strftime('%Y-%m') # Format index as string
+    stats_df = stats_df.fillna(0) # Replace NaN with 0 for months with no activity
     
     # Add a total row
     stats_df.loc['TOTALE'] = stats_df.sum()
     
-    return stats_df, "Statistiche generate."
+    return stats_df, "Statistics generated."
 
 def plot_monthly_stats(stats_df, filename):
     """
@@ -230,14 +242,14 @@ def plot_monthly_stats(stats_df, filename):
         stats_to_plot = stats_df.drop('TOTALE', errors='ignore')
 
         if stats_to_plot.empty:
-            return False, "Nessun dato da plottare."
+            return False, "No data to plot."
 
         ax = stats_to_plot.plot(kind='bar', figsize=(12, 7), rot=45)
         
         # Add titles and labels
-        ax.set_title(f"Riepilogo Entrate/Uscite Mensili", fontsize=16)
-        ax.set_ylabel("Importo (€)")
-        ax.set_xlabel("Mese")
+        ax.set_title(f"Monthly Income/Expense Summary", fontsize=16)
+        ax.set_ylabel("Amount (€)")
+        ax.set_xlabel("Month")
         ax.grid(axis='y', linestyle='--', alpha=0.7)
         
         # Save the figure
@@ -245,9 +257,9 @@ def plot_monthly_stats(stats_df, filename):
         plt.savefig(filename)
         plt.close() # Close the plot to free memory
         
-        return True, f"Grafico salvato come {filename}"
+        return True, f"Chart saved as {filename}"
     except Exception as e:
-        return False, f"Errore during la generazione del grafico: {e}"
+        return False, f"Error during chart generation: {e}"
 
 def export_per_commercialista(filename, year, format='csv'):
     """
@@ -291,13 +303,13 @@ def export_per_commercialista(filename, year, format='csv'):
         if format == 'csv':
             # Use semicolon separator and comma decimal for Italian locale
             export_df.to_csv(filename, index=False, encoding='utf-8-sig', sep=';', decimal=',')
-            msg = f"Esportazione CSV completata: {filename}"
+            msg = f"CSV export complete: {filename}"
         elif format == 'excel':
             export_df.to_excel(filename, index=False)
-            msg = f"Esportazione Excel completata: {filename}"
+            msg = f"Excel export complete: {filename}"
         else:
-            return False, "Formato non supportato."
+            return False, "Unsupported format."
             
         return True, msg
     except Exception as e:
-        return False, f"Errore durante l'esportazione: {e}"
+        return False, f"Error during export: {e}"

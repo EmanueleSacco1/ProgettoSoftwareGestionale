@@ -4,46 +4,61 @@ from backend import address_book as db_rubrica
 from .page_base import PageBase
 
 class PaginaRubrica(PageBase):
-    """Gestione della Rubrica (lista + dettaglio contatto)."""
+    """
+    Manages the Address Book (Contacts) page.
+    
+    This class implements a list/detail view, allowing users to
+    search, view, create, update, and delete contacts (Customers or Suppliers).
+    """
     
     def __init__(self, master):
+        """
+        Initialize the Address Book page.
+        
+        Args:
+            master: The parent widget (main_content_frame from App).
+        """
         super().__init__(master, fg_color="transparent")
 
-        # Layout principale
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=2)
-        self.grid_rowconfigure(1, weight=1)
+        # --- Main Layout ---
+        # Configure a 2-column layout
+        self.grid_columnconfigure(0, weight=1) # Column 0: List
+        self.grid_columnconfigure(1, weight=2) # Column 1: Detail Form (wider)
+        self.grid_rowconfigure(1, weight=1)    # Row 1: Detail Form (expands)
 
-        self.id_contatto_selezionato = None
+        self.id_contatto_selezionato = None # Tracks the ID of the contact being edited
         self.font_bold = ctk.CTkFont(weight="bold")
 
-        # --- Colonna sinistra: Lista contatti ---
+        # --- Left Column: Contact List ---
         frame_lista = ctk.CTkFrame(self, corner_radius=10)
         frame_lista.grid(row=0, column=0, rowspan=2, padx=(20, 10), pady=20, sticky="nsew")
-        frame_lista.grid_rowconfigure(2, weight=1)
+        frame_lista.grid_rowconfigure(2, weight=1) # Make the list area expandable
         frame_lista.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(frame_lista, text="Rubrica Contatti", font=ctk.CTkFont(size=18, weight="bold")).grid(
             row=0, column=0, columnspan=2, padx=15, pady=(15, 10), sticky="w"
         )
 
-        # Barra di ricerca
+        # --- Search Bar ---
         search_frame = ctk.CTkFrame(frame_lista, fg_color="transparent")
         search_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
         search_frame.grid_columnconfigure(0, weight=1)
 
         self.entry_ricerca = ctk.CTkEntry(search_frame, placeholder_text="Cerca per nome o P.IVA...")
         self.entry_ricerca.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+        # Bind the <Return> key (Enter) to the search function
         self.entry_ricerca.bind("<Return>", lambda e: self.aggiorna_lista_contatti())
 
         btn_cerca = ctk.CTkButton(search_frame, text="Cerca", width=80, command=self.aggiorna_lista_contatti)
         btn_cerca.grid(row=0, column=1)
 
-        # Elenco contatti
+        # --- Contact List (Scrollable) ---
         self.frame_scroll_contatti = ctk.CTkScrollableFrame(frame_lista, fg_color="transparent")
         self.frame_scroll_contatti.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
 
-        # --- Colonna destra: Form dettagli ---
+        # --- Right Column: Detail Form ---
+        
+        # Title bar for the form
         frame_titolo_form = ctk.CTkFrame(self, fg_color="transparent")
         frame_titolo_form.grid(row=0, column=1, padx=(10, 20), pady=(20, 0), sticky="ew")
 
@@ -52,15 +67,18 @@ class PaginaRubrica(PageBase):
         )
         self.lbl_titolo_form.pack(side="left", padx=10)
 
+        # "New Contact" button
         btn_nuovo = ctk.CTkButton(frame_titolo_form, text="Nuovo Contatto", width=120, command=self.pulisci_form)
         btn_nuovo.pack(side="right", padx=10)
 
+        # Main form frame
         frame_form = ctk.CTkFrame(self, corner_radius=10)
         frame_form.grid(row=1, column=1, padx=(10, 20), pady=(0, 20), sticky="nsew")
-        frame_form.grid_columnconfigure(1, weight=1)
+        frame_form.grid_columnconfigure(1, weight=1) # Make entry fields expandable
 
+        # Define form fields
         labels = [
-            ("Tipo", None),
+            ("Tipo", None), # Special case for segmented button
             ("Nome*", "entry_nome"),
             ("Azienda", "entry_azienda"),
             ("P.IVA / CF", "entry_piva"),
@@ -70,18 +88,21 @@ class PaginaRubrica(PageBase):
             ("Note", "entry_note"),
         ]
 
+        # Contact Type (Cliente/Fornitore)
         self.seg_tipo = ctk.CTkSegmentedButton(frame_form, values=["Cliente", "Fornitore"])
         self.seg_tipo.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
+        # Create form rows dynamically
         row = 1
-        for label, attr in labels[1:]:
+        for label, attr in labels[1:]: # Skip the first item ("Tipo")
             ctk.CTkLabel(frame_form, text=label).grid(row=row, column=0, padx=10, pady=8, sticky="w")
             entry = ctk.CTkEntry(frame_form)
             entry.grid(row=row, column=1, padx=10, pady=8, sticky="ew")
+            # Store the entry widget as an attribute of 'self' (e.g., self.entry_nome)
             setattr(self, attr, entry)
             row += 1
 
-        # Pulsanti azione
+        # --- Form Action Buttons (Save, Delete) ---
         frame_btn = ctk.CTkFrame(frame_form, fg_color="transparent")
         frame_btn.grid(row=row, column=0, columnspan=2, padx=10, pady=20, sticky="ew")
         frame_btn.grid_columnconfigure((0, 1), weight=1)
@@ -90,6 +111,7 @@ class PaginaRubrica(PageBase):
         ctk.CTkButton(frame_btn, text="Elimina Contatto", fg_color="#D32F2F", hover_color="#B71C1C",
                       command=self.elimina_contatto).grid(row=0, column=1, padx=5, sticky="ew")
 
+        # Load initial data
         self.on_show()
 
     def on_show(self):
@@ -104,8 +126,11 @@ class PaginaRubrica(PageBase):
 
     def aggiorna_lista_contatti(self, event=None):
         """
-        Loads (or reloads) the contact list on the left,
-        applying the search filter if one is provided.
+        Loads (or reloads) the contact list in the left-hand scrollable frame.
+        It applies the search filter from the search entry box if one is provided.
+        
+        Args:
+            event (tkinter.Event, optional): Passed by the <Return> keybind. Not used.
         """
         query = self.entry_ricerca.get()
         
@@ -124,7 +149,7 @@ class PaginaRubrica(PageBase):
                 ctk.CTkLabel(self.frame_scroll_contatti, text="Nessun contatto trovato.").pack(padx=10, pady=10)
                 return
 
-            # Populate the list with clickable frames
+            # Populate the list with clickable frames, sorted by name
             for i, contact in enumerate(sorted(contatti, key=lambda x: x.get('name', ''))):
                 nome = contact.get('name', 'Senza Nome')
                 azienda = contact.get('company', 'Privato')
@@ -138,12 +163,12 @@ class PaginaRubrica(PageBase):
                 lbl_azienda = ctk.CTkLabel(frame_contatto, text=f"{azienda} ({contact.get('type')})", anchor="w")
                 lbl_azienda.pack(fill="x")
                 
-                # Bind the click event to show details
+                # Bind the click event to all elements in the frame
                 frame_contatto.bind("<Button-1>", lambda e, c=contact: self.mostra_dettagli_contatto(c))
                 lbl_nome.bind("<Button-1>", lambda e, c=contact: self.mostra_dettagli_contatto(c))
                 lbl_azienda.bind("<Button-1>", lambda e, c=contact: self.mostra_dettagli_contatto(c))
                 
-                # Add a separator
+                # Add a visual separator
                 if i < len(contatti) - 1:
                     ctk.CTkFrame(self.frame_scroll_contatti, height=1, fg_color="gray").pack(fill="x", padx=5, pady=3)
 
@@ -176,11 +201,16 @@ class PaginaRubrica(PageBase):
 
     def pulisci_form(self, event=None):
         """
-        Clears the form on the right and resets it to "New Contact" mode.
+        Clears all fields in the detail form on the right and 
+        resets it to "New Contact" mode.
+        
+        Args:
+            event (tkinter.Event, optional): Passed by button click. Not used.
         """
-        self.id_contatto_selezionato = None
+        self.id_contatto_selezionato = None # No contact is selected
         self.lbl_titolo_form.configure(text="Nuovo Contatto")
         
+        # Reset all widgets to default state
         self.seg_tipo.set("Cliente")
         self.entry_nome.delete(0, "end")
         self.entry_azienda.delete(0, "end")
@@ -194,10 +224,11 @@ class PaginaRubrica(PageBase):
 
     def salva_contatto(self):
         """
-        Collects data from the form and calls the backend to
-        either create a new contact or update an existing one.
+        Collects all data from the form fields and calls the backend to
+        either create a new contact or update an existing one, based on
+        whether `self.id_contatto_selezionato` is set.
         """
-        # Collect data from widgets
+        # Collect data from all widgets
         dati = {
             'type': self.seg_tipo.get(),
             'name': self.entry_nome.get(),
@@ -209,22 +240,23 @@ class PaginaRubrica(PageBase):
             'notes': self.entry_note.get()
         }
 
+        # Basic validation
         if not dati['name']:
             tkmb.showwarning("Dati Mancanti", "Il campo 'Nome' è obbligatorio.")
             return
 
         try:
             if self.id_contatto_selezionato:
-                # --- Update Existing ---
+                # --- Update Existing Contact ---
                 db_rubrica.update_contact(self.id_contatto_selezionato, dati)
                 msg = "Contatto aggiornato!"
             else:
-                # --- Create New ---
+                # --- Create New Contact ---
                 db_rubrica.create_contact(dati)
                 msg = "Contatto creato!"
             
             tkmb.showinfo("Successo", msg)
-            self.pulisci_form()
+            self.pulisci_form() # Clear the form
             self.aggiorna_lista_contatti() # Refresh the list
 
         except Exception as e:
@@ -233,6 +265,7 @@ class PaginaRubrica(PageBase):
     def elimina_contatto(self):
         """
         Deletes the contact currently loaded in the form.
+        Asks for user confirmation before proceeding.
         """
         if not self.id_contatto_selezionato:
             tkmb.showwarning("Nessuna Selezione", "Nessun contatto selezionato da eliminare.")
@@ -245,9 +278,11 @@ class PaginaRubrica(PageBase):
             return
             
         try:
+            # Call backend to delete
             db_rubrica.delete_contact(self.id_contatto_selezionato)
             tkmb.showinfo("Successo", "Contatto eliminato.")
-            self.pulisci_form()
+            self.pulisci_form() # Clear the form
             self.aggiorna_lista_contatti() # Refresh the list
         except Exception as e:
+            # Handle potential errors (e.g., contact linked to an invoice)
             tkmb.showerror("Errore", f"Impossibile eliminare il contatto:\n{e}")

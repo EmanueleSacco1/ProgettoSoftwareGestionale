@@ -31,10 +31,10 @@ def create_articolo(data):
             'qta_in_stock': Decimal(str(data.get('qta_in_stock', '0')))
         }
     except InvalidOperation as e:
-        raise ValueError(f"Prezzo o quantità non validi: {e}")
+        raise ValueError(f"Invalid price or quantity: {e}")
 
     if not new_articolo['nome']:
-        raise ValueError("Il nome è obbligatorio.")
+        raise ValueError("Name is mandatory.")
 
     articoli.append(new_articolo)
     db.save_data(db.MAGAZZINO_DB, articoli)
@@ -92,7 +92,7 @@ def update_articolo(articolo_id, updated_data):
                     
                 art.update(updated_data)
                 
-                # Ensure price is converted to Decimal
+                # Ensure price is converted back to Decimal
                 if 'prezzo_acquisto' in updated_data:
                     art['prezzo_acquisto'] = Decimal(str(updated_data['prezzo_acquisto']))
                     
@@ -106,7 +106,7 @@ def update_articolo(articolo_id, updated_data):
         return None
         
     except InvalidOperation as e:
-         raise ValueError(f"Prezzo non valido: {e}")
+         raise ValueError(f"Invalid price: {e}")
 
 def delete_articolo(articolo_id):
     """
@@ -119,6 +119,7 @@ def delete_articolo(articolo_id):
         bool: True if deletion was successful, False otherwise.
     """
     articoli = db.load_data(db.MAGAZZINO_DB)
+    # Rebuild the list excluding the item to delete
     new_articoli = [art for art in articoli if art.get('id') != articolo_id]
     
     if len(new_articoli) < len(articoli):
@@ -168,7 +169,7 @@ def update_stock(articolo_id, quantita_delta):
     try:
         qta_delta = Decimal(str(quantita_delta))
     except InvalidOperation as e:
-        return False, f"Quantità non valida: {e}"
+        return False, f"Invalid quantity: {e}"
 
     for i, art in enumerate(articoli):
         if art.get('id') == articolo_id:
@@ -177,7 +178,7 @@ def update_stock(articolo_id, quantita_delta):
             
             if new_stock < 0:
                 # Prevent negative stock
-                return False, f"Stock insufficiente. Disponibili: {current_stock}"
+                return False, f"Insufficient stock. Available: {current_stock}"
                 
             art['qta_in_stock'] = new_stock
             articoli[i] = art
@@ -186,5 +187,5 @@ def update_stock(articolo_id, quantita_delta):
             
     if articolo_found:
         db.save_data(db.MAGAZZINO_DB, articoli)
-        return True, f"Stock aggiornato. Nuova quantità: {new_stock}"
-    return False, "Articolo non trovato."
+        return True, f"Stock updated. New quantity: {new_stock}"
+    return False, "Item not found."

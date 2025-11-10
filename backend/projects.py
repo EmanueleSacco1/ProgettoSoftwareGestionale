@@ -31,7 +31,7 @@ def create_project(project_data):
     # Validate client existence
     client = db_rubrica.find_contact_by_id(project_data.get('client_id'))
     if not client:
-        raise ValueError(f"Cliente con ID {project_data.get('client_id')} non trovato.")
+        raise ValueError(f"Client with ID {project_data.get('client_id')} not found.")
 
     # Build the new project object
     new_project = {
@@ -103,7 +103,7 @@ def update_project(project_id, updated_data):
         if project.get('id') == project_id:
             # Validate status if it's being changed
             if 'status' in updated_data and updated_data['status'] not in STATI_PROGETTO:
-                raise ValueError(f"Stato '{updated_data['status']}' non valido.")
+                raise ValueError(f"Invalid status: '{updated_data['status']}'.")
                 
             project.update(updated_data)
             projects[i] = project
@@ -161,7 +161,7 @@ def add_fase_to_project(project_id, nome_fase, scadenza):
     """
     project = find_project_by_id(project_id)
     if not project:
-        return False, "Progetto non trovato."
+        return False, "Project not found."
         
     fase = {
         'id': str(uuid.uuid4()),
@@ -171,9 +171,10 @@ def add_fase_to_project(project_id, nome_fase, scadenza):
     }
     project['fasi'].append(fase)
     
-    # update_project saves the entire project list to the database
+    # We must save the *entire* projects list back to the DB
+    # We do this by calling update_project with the modified project object
     update_project(project_id, project) 
-    return True, "Fase aggiunta."
+    return True, "Phase added."
 
 def toggle_fase_status(project_id, fase_id):
     """
@@ -187,7 +188,7 @@ def toggle_fase_status(project_id, fase_id):
         tuple (bool, str): (True, "Success message") or (False, "Error message").
     """
     project = find_project_by_id(project_id)
-    if not project: return False, "Progetto non trovato."
+    if not project: return False, "Project not found."
 
     fase_found = False
     for fase in project['fasi']:
@@ -198,8 +199,8 @@ def toggle_fase_status(project_id, fase_id):
     
     if fase_found:
         update_project(project_id, project)
-        return True, "Stato fase aggiornato."
-    return False, "Fase non trovata."
+        return True, "Phase status updated."
+    return False, "Phase not found."
 
 def delete_fase(project_id, fase_id):
     """
@@ -213,7 +214,7 @@ def delete_fase(project_id, fase_id):
         tuple (bool, str): (True, "Success message") or (False, "Error message").
     """
     project = find_project_by_id(project_id)
-    if not project: return False, "Progetto non trovato."
+    if not project: return False, "Project not found."
     
     original_len = len(project['fasi'])
     # Rebuild the list without the matching phase
@@ -221,8 +222,8 @@ def delete_fase(project_id, fase_id):
     
     if len(project['fasi']) < original_len:
         update_project(project_id, project)
-        return True, "Fase eliminata."
-    return False, "Fase non trovata."
+        return True, "Phase deleted."
+    return False, "Phase not found."
 
 
 # --- Time Tracking (Attività) Management ---
@@ -243,12 +244,12 @@ def add_attivita_to_project(project_id, data, ore, descrizione, fatturabile=True
     """
     project = find_project_by_id(project_id)
     if not project:
-        return False, "Progetto non trovato."
+        return False, "Project not found."
         
     try:
         ore_float = float(ore)
     except ValueError:
-        return False, "Le ore devono essere un numero."
+        return False, "Hours must be a number."
 
     attivita = {
         'id': str(uuid.uuid4()),
@@ -259,7 +260,7 @@ def add_attivita_to_project(project_id, data, ore, descrizione, fatturabile=True
     }
     project['attivita'].append(attivita)
     update_project(project_id, project) # Save changes
-    return True, "Attività aggiunta."
+    return True, "Activity added."
 
 def delete_attivita(project_id, attivita_id):
     """
@@ -273,15 +274,16 @@ def delete_attivita(project_id, attivita_id):
         tuple (bool, str): (True, "Success message") or (False, "Error message").
     """
     project = find_project_by_id(project_id)
-    if not project: return False, "Progetto non trovato."
+    if not project: return False, "Project not found."
     
     original_len = len(project['attivita'])
+    # Rebuild the list without the matching activity
     project['attivita'] = [a for a in project['attivita'] if a['id'] != attivita_id]
     
     if len(project['attivita']) < original_len:
         update_project(project_id, project)
-        return True, "Attività eliminata."
-    return False, "Attività non trovata."
+        return True, "Activity deleted."
+    return False, "Activity not found."
 
 
 # --- File Management ---
@@ -316,34 +318,34 @@ def add_file_to_project(project_id, source_file_path):
     """
     project = find_project_by_id(project_id)
     if not project:
-        return False, "Progetto non trovato."
+        return False, "Project not found."
         
     if not os.path.exists(source_file_path):
-        return False, "File sorgente non trovato."
+        return False, "Source file not found."
         
     filename = os.path.basename(source_file_path)
     
-    # Create the project's specific directory
+    # Get or create the project's specific directory
     project_files_path = get_project_files_path(project_id)
     destination_path = os.path.join(project_files_path, filename)
     
     # Prevent overwriting
     if os.path.exists(destination_path):
-        return False, f"Un file con nome '{filename}' esiste già in questo progetto."
+        return False, f"A file named '{filename}' already exists in this project."
 
     try:
         # Perform the physical file copy
         shutil.copy(source_file_path, destination_path)
     except Exception as e:
-        return False, f"Impossibile copiare il file: {e}"
+        return False, f"Could not copy file: {e}"
 
     # If copy succeeds, register the filename in the project data
     if filename not in project['file_archiviati']:
         project['file_archiviati'].append(filename)
         update_project(project_id, project)
-        return True, f"File copiato e registrato con successo."
+        return True, f"File copied and registered successfully."
     
-    return False, "File già registrato (ma la copia è stata eseguita)."
+    return False, "File already registered (but copy was executed)."
 
 def delete_file_from_project(project_id, filename):
     """
@@ -359,7 +361,7 @@ def delete_file_from_project(project_id, filename):
     """
     project = find_project_by_id(project_id)
     if not project:
-        return False, "Progetto non trovato."
+        return False, "Project not found."
     
     if filename in project['file_archiviati']:
         # 1. Remove from data registration
@@ -374,10 +376,10 @@ def delete_file_from_project(project_id, filename):
         except Exception as e:
             # Report error, but the data registration is already removed,
             # so we still return True (partial success)
-            return True, f"Registrazione rimossa, ma errore eliminazione file: {e}"
+            return True, f"Registration removed, but error deleting file: {e}"
             
-        return True, "File e registrazione rimossi."
-    return False, "File non trovato nella lista del progetto."
+        return True, "File and registration removed."
+    return False, "File not found in project list."
 
 
 # --- Dashboard Calculation ---
@@ -405,6 +407,7 @@ def calculate_project_totals(project_id):
     for a in project.get('attivita', []):
         total_ore += a['ore']
         # Handle old data created before 'fatturabile' flag existed
+        # Default to True if the flag is missing
         if a.get('fatturabile', True): 
             ore_fatturabili += a['ore']
 

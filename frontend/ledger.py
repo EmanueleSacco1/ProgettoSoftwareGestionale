@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import os
 
 # Import backend logic
-from backend import ledger as db_ledger     # Rinominato
+from backend import ledger as db_ledger     # Renamed
 from backend import tax as db_tasse
 from backend import documents as db_docs
 from backend import address_book as db_rubrica
@@ -18,12 +18,12 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
     Page for managing the Financial Ledger (Registro Movimenti) and Tax Estimates.
     
     This page uses a CTkTabview to separate the two main functions:
-    1.  Ledger: Logging income/expenses and exporting for the accountant.
-    2.  Tax: Configuring tax rates and viewing estimations.
+    1.  Ledger (Registro Movimenti): Logging income/expenses and exporting for the accountant.
+    2.  Tax (Stima Tasse): Configuring tax rates and viewing estimations.
     """
     def __init__(self, master):
         """
-        Initialize the Accounting page.
+        Initialize the Accounting (Ledger) page.
         
         Args:
             master: The parent widget (main_content_frame from App).
@@ -36,14 +36,15 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
         
         ctk.CTkLabel(self, text="Contabilità e Tasse", font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=10, pady=10, sticky="w")
         
+        # Main TabView to separate Ledger and Tax
         self.tab_view = ctk.CTkTabview(self)
         self.tab_view.grid(row=1, column=0, sticky="nsew")
         
-        self.tab_primanota = self.tab_view.add("Registro Movimenti") # Rinominato
+        self.tab_primanota = self.tab_view.add("Registro Movimenti") # Renamed
         self.tab_tasse = self.tab_view.add("Stima Tasse")
         
         # Create the widgets for each tab
-        self._crea_widgets_tab_registro(self.tab_primanota) # Rinominato
+        self._crea_widgets_tab_registro(self.tab_primanota) # Renamed
         self._crea_widgets_tab_tasse(self.tab_tasse)
 
     def on_show(self):
@@ -58,27 +59,36 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
 
     # --- Registro Movimenti (Ledger) Tab ---
 
-    def _crea_widgets_tab_registro(self, tab): # Rinominato
-        """Populates the 'Registro Movimenti' (Ledger) tab with its widgets."""
+    def _crea_widgets_tab_registro(self, tab): # Renamed
+        """
+        Helper method to populate the 'Registro Movimenti' (Ledger) tab 
+        with its widgets (buttons, scrollable list).
+        
+        Args:
+            tab (CTkFrame): The parent tab frame.
+        """
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_rowconfigure(1, weight=1)
         
+        # Frame for action buttons
         frame_azioni = ctk.CTkFrame(tab, fg_color="transparent")
         frame_azioni.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
         
+        # --- Action Buttons ---
         ctk.CTkButton(frame_azioni, text="Registra Incasso (da Fattura)", command=self.apri_popup_registra_incasso).pack(side="left", padx=5)
         ctk.CTkButton(frame_azioni, text="Registra Uscita", command=lambda: self.apri_popup_movimento_manuale('Uscita')).pack(side="left", padx=5)
         ctk.CTkButton(frame_azioni, text="Registra Entrata", command=lambda: self.apri_popup_movimento_manuale('Entrata')).pack(side="left", padx=5)
         ctk.CTkButton(frame_azioni, text="Esporta per Commercialista", command=self.esporta_commercialista).pack(side="left", padx=5)
         ctk.CTkButton(frame_azioni, text="Grafico Annuale", command=self.genera_grafico_primanota).pack(side="left", padx=5)
         
+        # --- Scrollable List for Transactions ---
         self.frame_scroll_movimenti = ctk.CTkScrollableFrame(tab)
         self.frame_scroll_movimenti.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         
         self.frame_scroll_movimenti.grid_columnconfigure(1, weight=1) # Configure column for description
         
     def _aggiorna_lista_movimenti(self):
-        """Clears and repopulates the list of financial transactions."""
+        """Clears and repopulates the list of financial transactions (movements)."""
         for widget in self.frame_scroll_movimenti.winfo_children():
             widget.destroy()
             
@@ -95,7 +105,7 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
                 ctk.CTkLabel(self.frame_scroll_movimenti, text="Nessun movimento trovato.").grid(row=1, column=0, pady=10)
                 return
 
-            # Header
+            # --- Header Row ---
             header_frame = ctk.CTkFrame(self.frame_scroll_movimenti, fg_color="transparent")
             header_frame.grid(row=1, column=0, columnspan=4, sticky="ew", padx=5, pady=2)
             header_frame.grid_columnconfigure(0, minsize=100) # Date
@@ -105,9 +115,10 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
             ctk.CTkLabel(header_frame, text="Data", font=ctk.CTkFont(weight="bold"), anchor="w").grid(row=0, column=0, sticky="w")
             ctk.CTkLabel(header_frame, text="Descrizione", font=ctk.CTkFont(weight="bold"), anchor="w").grid(row=0, column=1, sticky="w")
             ctk.CTkLabel(header_frame, text="Importo", font=ctk.CTkFont(weight="bold"), anchor="e").grid(row=0, column=2, sticky="e")
+            # Separator
             ctk.CTkFrame(self.frame_scroll_movimenti, height=1, fg_color="gray").grid(row=2, column=0, columnspan=4, sticky="ew", padx=5, pady=(0, 5))
 
-            # Rows
+            # --- Transaction Rows ---
             for i, mov in enumerate(movimenti):
                 row_frame = ctk.CTkFrame(self.frame_scroll_movimenti, fg_color="transparent")
                 row_frame.grid(row=i+3, column=0, columnspan=4, sticky="ew", padx=5)
@@ -115,6 +126,7 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
                 row_frame.grid_columnconfigure(2, minsize=100)
                 row_frame.grid_columnconfigure(3, minsize=30)
 
+                # Set color and sign based on transaction type
                 color = "green" if mov['type'] == 'Entrata' else "red"
                 importo = mov['amount_totale'] if mov['type'] == 'Entrata' else -mov['amount_totale']
                 
@@ -122,6 +134,7 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
                 ctk.CTkLabel(row_frame, text=mov['description'], anchor="w").grid(row=0, column=1, sticky="ew", padx=10)
                 ctk.CTkLabel(row_frame, text=f"{importo:.2f} €", text_color=color, anchor="e").grid(row=0, column=2, sticky="e")
                 
+                # Delete button for each transaction
                 btn_del = ctk.CTkButton(row_frame, text="X", width=30, fg_color="#D32F2F", hover_color="#B71C1C",
                                         command=lambda id=mov['id']: self.elimina_movimento(id))
                 btn_del.grid(row=0, column=3, padx=(5,0))
@@ -130,7 +143,10 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
             tkmb.showerror("Errore", f"Impossibile caricare i movimenti: {e}")
 
     def apri_popup_registra_incasso(self):
-        """Opens a popup to select an unpaid invoice and mark it as paid."""
+        """
+        Opens a modal popup to select an unpaid invoice and mark it as paid.
+        This function links the Documents module with the Ledger module.
+        """
         
         popup = ctk.CTkToplevel(self)
         popup.title("Registra Incasso da Fattura")
@@ -143,6 +159,7 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
             invoices = [f for f in db_docs.get_all_documents(doc_type='invoice') if f['status'] in ['In sospeso', 'Scaduto']]
             clienti = {c['id']: c for c in db_rubrica.get_all_contacts()}
             
+            # Create display strings and a map to get the invoice ID
             invoice_options = [f"{f['number']} - {clienti.get(f['client_id'], {'name': 'N/A'})['name']} ({f['total_da_pagare']:.2f} €)" for f in invoices]
             invoice_map = {f"{f['number']} - {clienti.get(f['client_id'], {'name': 'N/A'})['name']} ({f['total_da_pagare']:.2f} €)": f['id'] for f in invoices}
 
@@ -160,11 +177,11 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
 
         ctk.CTkLabel(popup, text="Data Incasso (YYYY-MM-DD):").pack(pady=(10,0))
         entry_data = ctk.CTkEntry(popup, width=150)
-        entry_data.insert(0, datetime.now().date().isoformat())
+        entry_data.insert(0, datetime.now().date().isoformat()) # Default to today
         entry_data.pack(pady=5)
         
         def salva_incasso():
-            """Callback to save the invoice payment."""
+            """Nested callback to save the invoice payment."""
             invoice_str = combo_invoices.get()
             data_incasso = entry_data.get()
             if not invoice_str or not data_incasso:
@@ -174,6 +191,7 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
             invoice_id = invoice_map[invoice_str]
             
             try:
+                # Call backend to create ledger entry AND update invoice status
                 success, msg = db_ledger.create_movimento_from_invoice(invoice_id, data_incasso)
                 if success:
                     tkmb.showinfo("Successo", msg, parent=popup)
@@ -192,10 +210,11 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
 
     def apri_popup_movimento_manuale(self, tipo):
         """
-        Opens a popup to manually add an 'Entrata' (Income) or 'Uscita' (Expense).
+        Opens a modal popup to manually add an 'Entrata' (Income) 
+        or 'Uscita' (Expense).
         
         Args:
-            tipo (str): 'Entrata' or 'Uscita'.
+            tipo (str): 'Entrata' or 'Uscita', to set the title and logic.
         """
         popup = ctk.CTkToplevel(self)
         popup.title(f"Registra {tipo} Manuale")
@@ -205,6 +224,7 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
         frame_grid.pack(fill="both", expand=True, padx=10, pady=10)
         frame_grid.grid_columnconfigure(1, weight=1)
         
+        # --- Form Fields ---
         row = 0
         ctk.CTkLabel(frame_grid, text="Data (YYYY-MM-DD):").grid(row=row, column=0, padx=10, pady=10, sticky="w")
         entry_data = ctk.CTkEntry(frame_grid)
@@ -244,7 +264,10 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
         lbl_totale.grid(row=row, column=1, padx=10, pady=10, sticky="e")
         
         def calcola_totale(*args):
-            """Updates the total label when user types in the fields."""
+            """
+            Nested function to updates the total label live as the user types 
+            in the financial fields.
+            """
             try:
                 netto = Decimal(entry_netto.get() or '0')
                 iva = Decimal(entry_iva.get() or '0')
@@ -260,13 +283,15 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
         entry_ritenuta.bind("<KeyRelease>", calcola_totale)
         
         def salva_movimento():
-            """Callback to save the manual transaction."""
+            """Nested callback to validate and save the manual transaction."""
             try:
+                # Re-calculate totals for saving
                 netto = Decimal(entry_netto.get() or '0')
                 iva = Decimal(entry_iva.get() or '0')
                 ritenuta = Decimal(entry_ritenuta.get() or '0')
                 totale = netto + iva - ritenuta
                 
+                # Build data dictionary
                 data = {
                     'date': entry_data.get(),
                     'type': tipo,
@@ -282,13 +307,13 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
                     tkmb.showwarning("Dati Mancanti", "Data e Descrizione sono obbligatori.", parent=popup)
                     return
                 
-                # Call backend
+                # Call backend to save
                 success, msg = db_ledger.create_movimento(data)
                 
                 if success:
                     tkmb.showinfo("Successo", msg, parent=popup)
                     popup.destroy()
-                    self.on_show() # Refresh
+                    self.on_show() # Refresh main list
                 else:
                     tkmb.showerror("Errore", msg, parent=popup)
                     
@@ -302,7 +327,13 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
         self.wait_window(popup)
 
     def elimina_movimento(self, movimento_id):
-        """Deletes a financial transaction."""
+        """
+        Deletes a financial transaction after confirmation.
+        Warns the user about potential invoice status reverts.
+        
+        Args:
+            movimento_id (str): The ID of the transaction to delete.
+        """
         if not tkmb.askyesno("Conferma", "Vuoi eliminare questo movimento?\nSe è collegato a una fattura, lo stato della fattura verrà ripristinato."):
             return
         
@@ -317,7 +348,10 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
             tkmb.showerror("Errore", f"Impossibile eliminare: {e}")
 
     def esporta_commercialista(self):
-        """Exports the annual ledger for the accountant."""
+        """
+        Handles the process of exporting the annual ledger for the accountant.
+        Asks for the year and the save location/format.
+        """
         year_dialog = ctk.CTkInputDialog(text="Inserisci l'anno per l'esportazione:", title="Esporta per Commercialista")
         year_str = year_dialog.get_input()
         
@@ -332,7 +366,7 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
             title="Salva Esportazione",
             defaultextension=".xlsx",
             filetypes=[("Excel Workbook", "*.xlsx"), ("CSV (Separatore ;)", "*.csv")],
-            initialfile=f"esportazione_registro_{year}" # Nome file aggiornato
+            initialfile=f"esportazione_registro_{year}" # Updated filename
         )
         
         if not file_path: return
@@ -340,17 +374,21 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
         fmt = 'csv' if file_path.endswith('.csv') else 'excel'
         
         try:
+            # Call backend export function
             success, msg = db_ledger.export_per_commercialista(file_path, year, fmt)
             if success:
                 tkmb.showinfo("Successo", f"Esportazione completata:\n{msg}")
-                os.startfile(os.path.dirname(file_path))
+                os.startfile(os.path.dirname(file_path)) # Open the folder
             else:
                 tkmb.showerror("Errore", msg)
         except Exception as e:
             tkmb.showerror("Errore Critico", f"Esportazione fallita:\n{e}")
 
     def genera_grafico_primanota(self):
-        """Generates and saves the annual income/expense chart."""
+        """
+        Generates and saves the annual income/expense chart.
+        Asks for the year and attempts to open the resulting .png file.
+        """
         year_dialog = ctk.CTkInputDialog(text="Inserisci l'anno per il grafico:", title="Grafico Annuale")
         year_str = year_dialog.get_input()
         
@@ -362,17 +400,19 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
             return
 
         try:
+            # 1. Get stats from backend
             stats_df, msg = db_ledger.generate_monthly_stats(year)
             if stats_df.empty:
                 tkmb.showwarning("Nessun Dato", msg)
                 return
             
-            filename = f"statistiche_movimenti_{year}.png" # Nome file aggiornato
+            # 2. Plot the stats
+            filename = f"statistiche_movimenti_{year}.png" # Updated filename
             success, msg_plot = db_ledger.plot_monthly_stats(stats_df, filename)
             
             if success:
                 tkmb.showinfo("Successo", f"Grafico generato con successo:\n{msg_plot}")
-                os.startfile(os.path.abspath(filename))
+                os.startfile(os.path.abspath(filename)) # Open the image
             else:
                 tkmb.showerror("Errore Grafico", msg_plot)
                 
@@ -382,10 +422,16 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
     # --- Tax Estimation Tab ---
     
     def _crea_widgets_tab_tasse(self, tab):
-        """Populates the 'Stima Tasse' (Tax Estimation) tab with its widgets."""
+        """
+        Helper method to populate the 'Stima Tasse' (Tax Estimation) tab
+        with its widgets.
+        
+        Args:
+            tab (CTkFrame): The parent tab frame.
+        """
         tab.grid_columnconfigure(0, weight=1)
         
-        # --- Configuration Frame ---
+        # --- Configuration Frame (for rates) ---
         frame_config = ctk.CTkFrame(tab)
         frame_config.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
         frame_config.grid_columnconfigure(1, weight=1)
@@ -408,7 +454,7 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
         
         ctk.CTkButton(frame_config, text="Salva Aliquote", command=self.salva_aliquote).grid(row=3, column=1, padx=10, pady=10, sticky="e")
         
-        # --- Estimation Frame ---
+        # --- Estimation Frame (for quarterly buttons) ---
         frame_stima = ctk.CTkFrame(tab)
         frame_stima.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         frame_stima.grid_columnconfigure(0, weight=1)
@@ -422,11 +468,11 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
         ctk.CTkButton(frame_stima, text="Trimestre 3 (Q3)", command=lambda: self.visualizza_stima(3)).grid(row=1, column=2, padx=5, pady=5, sticky="ew")
         ctk.CTkButton(frame_stima, text="Trimestre 4 (Q4)", command=lambda: self.visualizza_stima(4)).grid(row=1, column=3, padx=5, pady=5, sticky="ew")
         
-        # Load initial values
+        # Load initial values into entry fields
         self._carica_aliquote()
 
     def _carica_aliquote(self):
-        """Loads the saved tax rates into the entry fields."""
+        """Loads the saved tax rates from the settings file into the entry fields."""
         settings = db.load_settings()
         tax_config = settings.get('tax_config', {})
         self.entry_inps.delete(0, "end")
@@ -435,7 +481,7 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
         self.entry_irpef.insert(0, str(tax_config.get('irpef_perc', '23.0')))
 
     def salva_aliquote(self):
-        """Saves the user-defined tax rates to the settings file."""
+        """Saves the user-defined tax rates from the entry fields to the settings file."""
         try:
             inps = float(self.entry_inps.get())
             irpef = float(self.entry_irpef.get())
@@ -449,16 +495,23 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
             tkmb.showerror("Errore", f"Valore non valido: {e}")
 
     def visualizza_stima(self, quarter):
-        """Calculates and displays the tax estimation in a popup window."""
+        """
+        Calculates and displays the tax estimation for a given quarter 
+        in a new Toplevel popup window.
+        
+        Args:
+            quarter (int): The quarter (1-4) to calculate for.
+        """
         try:
             year = datetime.now().year
+            # Call backend to get all estimation data
             risultato, msg = db_tasse.get_stima_completa(year, quarter)
             
             if not risultato:
                 tkmb.showwarning("Errore Stima", msg)
                 return
 
-            # Format the message for the popup
+            # --- Format the results into a string for display ---
             msg_popup = f"--- STIMA PERIODO: {risultato['periodo']} (Anno {year}) ---\n\n"
             msg_popup += "*** ATTENZIONE: SOLO A SCOPO INFORMATIVO. ***\n\n"
             msg_popup += "--- Liquidazione IVA (Stima Trimestrale) ---\n"
@@ -475,7 +528,8 @@ class PaginaLedger(PageBase): # --- CLASSE RINOMINATA ---
             msg_popup += f"  Imponibile IRPEF (Stima): {risultato['imponibile_irpef']:.2f} €\n"
             msg_popup += f"  Stima IRPEF (Lorda): {risultato['stima_irpef']:.2f} €\n"
             
-            # Show in a Toplevel window to allow copy-pasting
+            # Show in a Toplevel window with a read-only Textbox
+            # This is better than a messagebox as it allows copy-pasting.
             popup = ctk.CTkToplevel(self)
             popup.title(f"Stima Tasse {risultato['periodo']}")
             popup.geometry("600x450")

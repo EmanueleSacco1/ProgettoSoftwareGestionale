@@ -68,6 +68,7 @@ def search_contacts(query):
     results = []
     
     for contact in contacts:
+        # Check query against multiple fields
         if (query in contact.get('name', '').lower() or
             query in contact.get('company', '').lower() or
             query in contact.get('vat_id', '').lower() or
@@ -139,15 +140,15 @@ def export_to_csv(filename='rubrica_export.csv'):
     """
     contacts = db.load_data(db.RUBRICA_DB)
     if not contacts:
-        return False, "Nessun contatto da esportare."
+        return False, "No contacts to export."
         
     try:
         df = pd.DataFrame(contacts)
         # Use utf-8-sig to include a BOM for Excel compatibility
         df.to_csv(filename, index=False, encoding='utf-8-sig')
-        return True, f"Esportato con successo in {filename}"
+        return True, f"Successfully exported to {filename}"
     except Exception as e:
-        return False, f"Errore durante l'esportazione CSV: {e}"
+        return False, f"Error during CSV export: {e}"
 
 def export_to_excel(filename='rubrica_export.xlsx'):
     """
@@ -162,7 +163,7 @@ def export_to_excel(filename='rubrica_export.xlsx'):
     """
     contacts = db.load_data(db.RUBRICA_DB)
     if not contacts:
-        return False, "Nessun contatto da esportare."
+        return False, "No contacts to export."
         
     try:
         df = pd.DataFrame(contacts)
@@ -171,9 +172,9 @@ def export_to_excel(filename='rubrica_export.xlsx'):
             df = df.drop(columns=['id'])
             
         df.to_excel(filename, index=False)
-        return True, f"Esportato con successo in {filename}"
+        return True, f"Successfully exported to {filename}"
     except Exception as e:
-        return False, f"Errore durante l'esportazione Excel: {e}"
+        return False, f"Error during Excel export: {e}"
 
 def import_from_csv(filename):
     """
@@ -192,7 +193,7 @@ def import_from_csv(filename):
             new_contacts = [row for row in reader]
         
         if not new_contacts:
-            return 0, "File vuoto o formato non valido."
+            return 0, "File is empty or in an invalid format."
 
         contacts = db.load_data(db.RUBRICA_DB)
         imported_count = 0
@@ -203,12 +204,12 @@ def import_from_csv(filename):
                 imported_count += 1
         
         db.save_data(db.RUBRICA_DB, contacts)
-        return imported_count, f"Importati {imported_count} contatti."
+        return imported_count, f"Imported {imported_count} contacts."
         
     except FileNotFoundError:
-        return 0, "File non trovato."
+        return 0, "File not found."
     except Exception as e:
-        return 0, f"Errore durante l'importazione: {e}"
+        return 0, f"Error during import: {e}"
 
 def import_from_excel(filename):
     """
@@ -227,7 +228,7 @@ def import_from_excel(filename):
         new_contacts = df.to_dict('records')
 
         if not new_contacts:
-            return 0, "File vuoto o formato non valido."
+            return 0, "File is empty or in an invalid format."
 
         contacts = db.load_data(db.RUBRICA_DB)
         imported_count = 0
@@ -238,9 +239,9 @@ def import_from_excel(filename):
                 imported_count += 1
                 
         db.save_data(db.RUBRICA_DB, contacts)
-        return imported_count, f"Importati {imported_count} contatti."
+        return imported_count, f"Imported {imported_count} contacts."
 
     except FileNotFoundError:
-        return 0, "File non trovato."
+        return 0, "File not found."
     except Exception as e:
-        return 0, f"Errore durante l'importazione: {e}"
+        return 0, f"Error during import: {e}"

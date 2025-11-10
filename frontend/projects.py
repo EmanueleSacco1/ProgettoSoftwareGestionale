@@ -16,8 +16,9 @@ class PaginaProgetti(PageBase):
     """
     Page for managing Projects.
     
-    This page uses a List/Detail layout. The Detail view uses a
-    CTkTabview to separate Dashboard, Phases, Activities, and Files.
+    This page uses a List/Detail layout. The left side shows a searchable
+    list of all projects. The right side (detail view) uses a
+    CTkTabview to separate a project's Dashboard, Phases, Activities, and Files.
     """
     def __init__(self, master):
         """
@@ -28,23 +29,24 @@ class PaginaProgetti(PageBase):
         """
         super().__init__(master, fg_color="transparent")
 
-        # --- Layout ---
+        # --- Layout Configuration ---
         # Column 0 = List, Column 1 = Detail
         self.grid_columnconfigure(0, weight=1) 
-        self.grid_columnconfigure(1, weight=2) 
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_columnconfigure(1, weight=2) # Detail view is wider
+        self.grid_rowconfigure(1, weight=1)    # Detail view expands vertically
         
-        self.progetto_selezionato = None # Tracks the currently loaded project
+        self.progetto_selezionato = None # Tracks the currently loaded project object
         self.font_bold = ctk.CTkFont(weight="bold")
 
         # --- Column 0: List, Search, New Button ---
         frame_lista = ctk.CTkFrame(self)
         frame_lista.grid(row=0, column=0, rowspan=2, padx=(20, 10), pady=20, sticky="nsew")
-        frame_lista.grid_rowconfigure(3, weight=1)
+        frame_lista.grid_rowconfigure(3, weight=1) # Make list scroll area expand
         frame_lista.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(frame_lista, text="Progetti", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, columnspan=2, padx=10, pady=(10,5), sticky="w")
         
+        # Search bar
         self.entry_ricerca = ctk.CTkEntry(frame_lista, placeholder_text="Cerca progetto...")
         self.entry_ricerca.grid(row=1, column=0, padx=(10,5), pady=(5,10), sticky="ew")
         self.entry_ricerca.bind("<Return>", lambda e: self.aggiorna_lista_progetti())
@@ -55,6 +57,7 @@ class PaginaProgetti(PageBase):
         btn_nuovo = ctk.CTkButton(frame_lista, text="Nuovo Progetto", command=self.crea_nuovo_progetto_popup)
         btn_nuovo.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky="ew")
 
+        # Scrollable list for projects
         self.frame_scroll_progetti = ctk.CTkScrollableFrame(frame_lista, fg_color="transparent")
         self.frame_scroll_progetti.grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
 
@@ -67,7 +70,7 @@ class PaginaProgetti(PageBase):
         self.lbl_titolo_form = ctk.CTkLabel(self.frame_dettaglio, text="Seleziona un progetto", font=ctk.CTkFont(size=18, weight="bold"))
         self.lbl_titolo_form.grid(row=0, column=0, padx=10, pady=(10,5), sticky="w")
 
-        # TabView
+        # TabView for project details
         self.tab_view = ctk.CTkTabview(self.frame_dettaglio, state="disabled") # Disabled until a project is selected
         self.tab_view.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         
@@ -83,6 +86,7 @@ class PaginaProgetti(PageBase):
         self._crea_widgets_attivita(self.tab_attivita)
         self._crea_widgets_file(self.tab_file)
         
+        # Load initial list
         self.on_show()
 
     def on_show(self):
@@ -96,10 +100,10 @@ class PaginaProgetti(PageBase):
         self._pulisci_dettagli()
 
     def _pulisci_dettagli(self):
-        """Hides the tabview and resets the title."""
+        """Helper function to reset the detail view to its initial state."""
         self.progetto_selezionato = None
         self.lbl_titolo_form.configure(text="Seleziona un progetto")
-        self.tab_view.configure(state="disabled")
+        self.tab_view.configure(state="disabled") # Hide/disable the tab view
 
     def aggiorna_lista_progetti(self, event=None):
         """
@@ -108,13 +112,15 @@ class PaginaProgetti(PageBase):
         """
         query = self.entry_ricerca.get()
         
+        # Clear previous list
         for widget in self.frame_scroll_progetti.winfo_children():
             widget.destroy()
             
         try:
-            # TODO: Add status filter dropdown
+            # TODO: Add a status filter dropdown (e.g., "Active", "Archived")
             all_progetti = db_progetti.get_all_projects()
             
+            # Filter by search query
             if query:
                 query_lower = query.lower()
                 progetti = [p for p in all_progetti if query_lower in p['name'].lower()]
@@ -125,7 +131,7 @@ class PaginaProgetti(PageBase):
                 ctk.CTkLabel(self.frame_scroll_progetti, text="Nessun progetto trovato.").pack(padx=10, pady=10)
                 return
 
-            # Populate the list with clickable frames
+            # Populate the list with clickable frames, sorted by name
             for i, proj in enumerate(sorted(progetti, key=lambda x: x['name'])):
                 frame_proj = ctk.CTkFrame(self.frame_scroll_progetti, fg_color="transparent", cursor="hand2")
                 frame_proj.pack(fill="x", padx=5, pady=(2,0))
@@ -135,11 +141,12 @@ class PaginaProgetti(PageBase):
                 lbl_stato = ctk.CTkLabel(frame_proj, text=f"Stato: {proj.get('status')}", anchor="w")
                 lbl_stato.pack(fill="x")
                 
-                # Bind click event
+                # Bind click event to all elements in the frame
                 frame_proj.bind("<Button-1>", lambda e, p=proj: self.mostra_dettagli_progetto(p))
                 lbl_nome.bind("<Button-1>", lambda e, p=proj: self.mostra_dettagli_progetto(p))
                 lbl_stato.bind("<Button-1>", lambda e, p=proj: self.mostra_dettagli_progetto(p))
                 
+                # Add separator
                 if i < len(progetti) - 1:
                     ctk.CTkFrame(self.frame_scroll_progetti, height=1, fg_color="gray").pack(fill="x", padx=5, pady=3)
 
@@ -149,10 +156,15 @@ class PaginaProgetti(PageBase):
     # --- Widget Creation for Tabs ---
 
     def _crea_widgets_dashboard(self, tab):
-        """Creates all widgets for the 'Dashboard' tab."""
+        """
+        Helper method to create all widgets for the 'Dashboard' tab.
+        
+        Args:
+            tab (CTkFrame): The parent 'Dashboard' tab frame.
+        """
         tab.grid_columnconfigure(1, weight=1)
         
-        # Display-only data
+        # --- Display-only data (Statistics) ---
         ctk.CTkLabel(tab, text="Dati Principali", font=self.font_bold).grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky="w")
         
         self.lbl_dash_cliente = ctk.CTkLabel(tab, text="Cliente: -")
@@ -164,7 +176,7 @@ class PaginaProgetti(PageBase):
         self.lbl_dash_costo = ctk.CTkLabel(tab, text="Costo Stimato: -")
         self.lbl_dash_costo.grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky="w")
 
-        # Editable data
+        # --- Editable data ---
         ctk.CTkLabel(tab, text="Modifica Progetto", font=self.font_bold).grid(row=5, column=0, columnspan=2, padx=10, pady=(20, 10), sticky="w")
         
         ctk.CTkLabel(tab, text="Nome Progetto").grid(row=6, column=0, padx=10, pady=5, sticky="w")
@@ -182,14 +194,19 @@ class PaginaProgetti(PageBase):
         btn_salva = ctk.CTkButton(tab, text="Salva Modifiche Dati", command=self.salva_dati_dashboard)
         btn_salva.grid(row=9, column=1, padx=10, pady=20, sticky="w")
         
-        # Delete button
+        # --- Delete button (Danger Zone) ---
         btn_elimina = ctk.CTkButton(tab, text="ELIMINA PROGETTO", fg_color="#D32F2F", hover_color="#B71C1C",
                                     command=self.elimina_progetto)
         btn_elimina.grid(row=10, column=1, padx=10, pady=20, sticky="w")
 
 
     def _crea_widgets_fasi(self, tab):
-        """Creates all widgets for the 'Fasi' (Phases) tab."""
+        """
+        Helper method to create all widgets for the 'Fasi' (Phases) tab.
+        
+        Args:
+            tab (CTkFrame): The parent 'Fasi' tab frame.
+        """
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_rowconfigure(1, weight=1)
         
@@ -200,7 +217,12 @@ class PaginaProgetti(PageBase):
         self.frame_scroll_fasi.grid(row=1, column=0, padx=5, pady=5, sticky="nsew")
 
     def _crea_widgets_attivita(self, tab):
-        """Creates all widgets for the 'Attività' (Time Log) tab."""
+        """
+        Helper method to create all widgets for the 'Attività' (Time Log) tab.
+        
+        Args:
+            tab (CTkFrame): The parent 'Attività' tab frame.
+        """
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_rowconfigure(1, weight=1)
         
@@ -211,7 +233,12 @@ class PaginaProgetti(PageBase):
         self.frame_scroll_attivita.grid(row=1, column=0, padx=5, pady=5, sticky="nsew")
 
     def _crea_widgets_file(self, tab):
-        """Creates all widgets for the 'File' tab."""
+        """
+        Helper method to create all widgets for the 'File' tab.
+        
+        Args:
+            tab (CTkFrame): The parent 'File' tab frame.
+        """
         tab.grid_columnconfigure(0, weight=1)
         tab.grid_rowconfigure(1, weight=1)
         
@@ -225,7 +252,8 @@ class PaginaProgetti(PageBase):
 
     def mostra_dettagli_progetto(self, progetto):
         """
-        Populates all tabs with the data of the selected project.
+        Main controller function to load all data for the selected project
+        into the entire detail view (all tabs).
         
         Args:
             progetto (dict): The project dictionary to load.
@@ -233,17 +261,20 @@ class PaginaProgetti(PageBase):
         self.progetto_selezionato = progetto
         self.lbl_titolo_form.configure(text=progetto.get('name'))
         self.tab_view.configure(state="normal") # Enable the tabs
-        self.tab_view.set("Dashboard") # Go to the first tab
+        self.tab_view.set("Dashboard") # Go to the first tab by default
         
-        # --- Populate Tab Dashboard ---
+        # --- Populate Tab 1: Dashboard ---
+        # Calculate fresh stats
         stats = db_progetti.calculate_project_totals(progetto['id'])
         cliente = db_rubrica.find_contact_by_id(progetto['client_id'])
         
+        # Update labels
         self.lbl_dash_cliente.configure(text=f"Cliente: {cliente.get('name', 'N/A')}")
         self.lbl_dash_ore.configure(text=f"Ore Totali: {stats['total_ore']:.2f} h")
         self.lbl_dash_ore_fatt.configure(text=f"Ore Fatturabili: {stats['ore_fatturabili']:.2f} h")
         self.lbl_dash_costo.configure(text=f"Costo Stimato (su ore fatt.): {stats['total_costo']:.2f} €")
 
+        # Update entry fields
         self.entry_dash_nome.delete(0, "end")
         self.entry_dash_nome.insert(0, progetto.get('name', ''))
         self.combo_dash_stato.set(progetto.get('status', 'In corso'))
@@ -256,21 +287,25 @@ class PaginaProgetti(PageBase):
         self._aggiorna_lista_file()
 
     def salva_dati_dashboard(self):
-        """Saves the main data from the Dashboard tab."""
+        """Saves the main editable data from the Dashboard tab."""
         if not self.progetto_selezionato:
             return
             
         try:
+            # Validate data
             tariffa = float(self.entry_dash_tariffa.get())
             dati = {
                 'name': self.entry_dash_nome.get(),
                 'status': self.combo_dash_stato.get(),
                 'tariffa_oraria': tariffa
             }
+            # Call backend to update
             db_progetti.update_project(self.progetto_selezionato['id'], dati)
             tkmb.showinfo("Successo", "Dati progetto aggiornati.")
-            # Refresh lists and detail view
+            
+            # Refresh lists and detail view to show changes
             self.aggiorna_lista_progetti()
+            # Reload the project from DB to get fresh data
             self.mostra_dettagli_progetto(db_progetti.find_project_by_id(self.progetto_selezionato['id']))
         except ValueError:
             tkmb.showerror("Errore", "La tariffa oraria deve essere un numero.")
@@ -278,7 +313,7 @@ class PaginaProgetti(PageBase):
             tkmb.showerror("Errore", f"Impossibile salvare i dati: {e}")
             
     def elimina_progetto(self):
-        """Deletes the currently selected project."""
+        """Deletes the currently selected project after confirmation."""
         if not self.progetto_selezionato:
             return
 
@@ -290,11 +325,12 @@ class PaginaProgetti(PageBase):
         try:
             db_progetti.delete_project(self.progetto_selezionato['id'])
             tkmb.showinfo("Successo", f"Progetto '{nome}' eliminato.")
-            self.on_show() # Refresh the whole page
+            self.on_show() # Refresh the whole page (clears detail, reloads list)
         except Exception as e:
             tkmb.showerror("Errore", f"Impossibile eliminare il progetto:\n{e}")
 
     # --- Fasi (Phases) Logic ---
+    
     def _aggiorna_lista_fasi(self):
         """Clears and repopulates the list of phases in the 'Fasi' tab."""
         for widget in self.frame_scroll_fasi.winfo_children():
@@ -305,6 +341,7 @@ class PaginaProgetti(PageBase):
             ctk.CTkLabel(self.frame_scroll_fasi, text="Nessuna fase definita.").pack()
             return
 
+        # Display phases sorted by due date
         for f in sorted(fasi, key=lambda x: x.get('scadenza', '9999')):
             stato_fase = "✅ Completata" if f['completata'] else "⏳ In Corso"
             testo = f"[{stato_fase}] {f['nome']} (Scadenza: {f.get('scadenza', 'N/D')})"
@@ -323,7 +360,7 @@ class PaginaProgetti(PageBase):
             btn_del.pack(side="left", padx=5)
 
     def apri_popup_fase(self):
-        """Opens a Toplevel window to add a new phase."""
+        """Opens a modal Toplevel window to add a new phase."""
         if not self.progetto_selezionato: return
 
         popup = ctk.CTkToplevel(self)
@@ -339,12 +376,14 @@ class PaginaProgetti(PageBase):
         entry_scadenza.pack(pady=5, padx=10, fill="x")
         
         def salva_fase():
+            """Nested callback to save the new phase."""
             nome = entry_nome.get()
             scadenza = entry_scadenza.get() or None
             if not nome:
                 tkmb.showwarning("Dati Mancanti", "Il nome è obbligatorio.", parent=popup)
                 return
             
+            # Call backend to add the phase
             db_progetti.add_fase_to_project(self.progetto_selezionato['id'], nome, scadenza)
             # Refresh data
             self.mostra_dettagli_progetto(db_progetti.find_project_by_id(self.progetto_selezionato['id']))
@@ -356,20 +395,25 @@ class PaginaProgetti(PageBase):
         self.wait_window(popup) # Wait until popup is closed
         
     def toggle_fase(self, fase_id):
+        """Toggles the 'completata' status of a phase."""
         if not tkmb.askyesno("Conferma", "Vuoi cambiare lo stato di questa fase?"):
             return
         db_progetti.toggle_fase_status(self.progetto_selezionato['id'], fase_id)
+        # Reload the project to show changes
         self.mostra_dettagli_progetto(db_progetti.find_project_by_id(self.progetto_selezionato['id']))
         
     def elimina_fase(self, fase_id):
+        """Deletes a phase from the project."""
         if not tkmb.askyesno("Conferma", "Vuoi eliminare questa fase?"):
             return
         db_progetti.delete_fase(self.progetto_selezionato['id'], fase_id)
+        # Reload the project to show changes
         self.mostra_dettagli_progetto(db_progetti.find_project_by_id(self.progetto_selezionato['id']))
 
     # --- Attività (Time Log) Logic ---
+    
     def _aggiorna_lista_attivita(self):
-        """Clears and repopulates the list of activities in the 'Attività' tab."""
+        """Clears and repopulates the list of activities (time logs) in the 'Attività' tab."""
         for widget in self.frame_scroll_attivita.winfo_children():
             widget.destroy()
             
@@ -378,6 +422,7 @@ class PaginaProgetti(PageBase):
             ctk.CTkLabel(self.frame_scroll_attivita, text="Nessuna attività registrata.").pack()
             return
 
+        # Display activities sorted by date (newest first)
         for a in sorted(attivita, key=lambda x: x.get('data', '0000'), reverse=True):
             stato_fatt = "[Fatt.]" if a.get('fatturabile', True) else "[Non-Fatt.]"
             testo = f"{a['data']}: {a['ore']}h {stato_fatt} - {a['descrizione']}"
@@ -392,7 +437,7 @@ class PaginaProgetti(PageBase):
             btn_del.pack(side="left", padx=5)
 
     def apri_popup_attivita(self):
-        """Opens a Toplevel window to add a new time log."""
+        """Opens a modal Toplevel window to add a new time log (activity)."""
         if not self.progetto_selezionato: return
 
         popup = ctk.CTkToplevel(self)
@@ -401,7 +446,7 @@ class PaginaProgetti(PageBase):
         
         ctk.CTkLabel(popup, text="Data (YYYY-MM-DD):").pack(pady=(10,0))
         entry_data = ctk.CTkEntry(popup, width=300)
-        entry_data.insert(0, datetime.now().date().isoformat())
+        entry_data.insert(0, datetime.now().date().isoformat()) # Default to today
         entry_data.pack(pady=5, padx=10, fill="x")
         
         ctk.CTkLabel(popup, text="Ore (es. 1.5):").pack(pady=(10,0))
@@ -413,10 +458,11 @@ class PaginaProgetti(PageBase):
         entry_desc.pack(pady=5, padx=10, fill="x")
         
         check_fatturabile = ctk.CTkCheckBox(popup, text="Attività Fatturabile", onvalue=True, offvalue=False)
-        check_fatturabile.select() # Default to True
+        check_fatturabile.select() # Default to True (billable)
         check_fatturabile.pack(pady=10, padx=10)
         
         def salva_attivita():
+            """Nested callback to validate and save the new time log."""
             data = entry_data.get()
             ore = entry_ore.get()
             desc = entry_desc.get()
@@ -427,15 +473,16 @@ class PaginaProgetti(PageBase):
                 return
             
             try:
-                # Test date format
+                # Validate date and hour formats
                 datetime.strptime(data, '%Y-%m-%d')
-                # Test hours format
                 float(ore)
             except ValueError:
                 tkmb.showerror("Errore Formato", "Data (YYYY-MM-DD) o Ore (es. 1.5) non validi.", parent=popup)
                 return
 
+            # Call backend to add the activity
             db_progetti.add_attivita_to_project(self.progetto_selezionato['id'], data, ore, desc, fatturabile)
+            # Reload the project to show changes
             self.mostra_dettagli_progetto(db_progetti.find_project_by_id(self.progetto_selezionato['id']))
             popup.destroy()
 
@@ -445,12 +492,15 @@ class PaginaProgetti(PageBase):
         self.wait_window(popup)
 
     def elimina_attivita(self, attivita_id):
+        """Deletes a time log (activity) from the project."""
         if not tkmb.askyesno("Conferma", "Vuoi eliminare questa attività?"):
             return
         db_progetti.delete_attivita(self.progetto_selezionato['id'], attivita_id)
+        # Reload the project to show changes
         self.mostra_dettagli_progetto(db_progetti.find_project_by_id(self.progetto_selezionato['id']))
 
     # --- File Management Logic ---
+    
     def _aggiorna_lista_file(self):
         """Clears and repopulates the list of files in the 'File' tab."""
         for widget in self.frame_scroll_file.winfo_children():
@@ -458,6 +508,7 @@ class PaginaProgetti(PageBase):
             
         files = self.progetto_selezionato.get('file_archiviati', [])
         
+        # Display the full path to the project's file folder
         ctk.CTkLabel(self.frame_scroll_file, text=f"Percorso: {os.path.abspath(db_progetti.get_project_files_path(self.progetto_selezionato['id']))}",
                      font=ctk.CTkFont(size=10, slant="italic")).pack(anchor="w", padx=5)
                      
@@ -465,6 +516,7 @@ class PaginaProgetti(PageBase):
             ctk.CTkLabel(self.frame_scroll_file, text="Nessun file archiviato.").pack(pady=10)
             return
 
+        # List all files with a delete button
         for f in files:
             frame_file = ctk.CTkFrame(self.frame_scroll_file, fg_color="transparent")
             frame_file.pack(fill="x", padx=5, pady=2)
@@ -476,29 +528,39 @@ class PaginaProgetti(PageBase):
             btn_del.pack(side="left", padx=5)
 
     def aggiungi_file(self):
-        """Opens a file dialog to select a file to copy to the project."""
+        """
+        Opens a file dialog to select a file, then copies that file
+        into the project's dedicated folder.
+        """
         if not self.progetto_selezionato: return
         
         source_path = filedialog.askopenfilename(title="Seleziona file da copiare")
         if not source_path:
             return # User cancelled
             
+        # Call backend to copy the file
         success, msg = db_progetti.add_file_to_project(self.progetto_selezionato['id'], source_path)
         if success:
             tkmb.showinfo("Successo", msg)
-            self._aggiorna_lista_file()
+            # Reload the project and file list
+            self.mostra_dettagli_progetto(db_progetti.find_project_by_id(self.progetto_selezionato['id']))
+            self._aggiorna_lista_file() # Redundant but safe
         else:
             tkmb.showerror("Errore", msg)
 
     def elimina_file(self, filename):
+        """Deletes a file from the project's folder."""
         if not tkmb.askyesno("Conferma", f"Vuoi eliminare il file '{filename}'?"):
             return
         db_progetti.delete_file_from_project(self.progetto_selezionato['id'], filename)
-        self._aggiorna_lista_file()
+        # Reload the project and file list
+        self.mostra_dettagli_progetto(db_progetti.find_project_by_id(self.progetto_selezionato['id']))
+        self._aggiorna_lista_file() # Redundant but safe
 
     # --- Project Creation Logic (Popup) ---
+    
     def crea_nuovo_progetto_popup(self):
-        """Opens a Toplevel window to create a new project."""
+        """Opens a modal Toplevel window to create a new project."""
         
         popup = ctk.CTkToplevel(self)
         popup.title("Nuovo Progetto")
@@ -509,7 +571,7 @@ class PaginaProgetti(PageBase):
         
         try:
             clienti = db_rubrica.get_all_contacts()
-            # Create a display-friendly list: "Nome (Azienda)"
+            # Filter for 'Cliente' type
             clienti_options = [f"{c['name']} ({c.get('company', 'N/A')})" for c in clienti if c.get('type') == 'Cliente']
             clienti_map = {f"{c['name']} ({c.get('company', 'N/A')})": c['id'] for c in clienti if c.get('type') == 'Cliente'}
             
@@ -536,6 +598,7 @@ class PaginaProgetti(PageBase):
         entry_tariffa.pack(pady=5, padx=10)
         
         def salva_progetto():
+            """Nested callback to validate and save the new project."""
             nome = entry_nome.get()
             cliente_scelto_str = combo_clienti.get()
             
@@ -544,16 +607,18 @@ class PaginaProgetti(PageBase):
                 return
             
             try:
+                # Build data dictionary
                 dati = {
                     'name': nome,
                     'client_id': clienti_map[cliente_scelto_str],
                     'tariffa_oraria': float(entry_tariffa.get() or "0.0")
                 }
                 
+                # Call backend to create
                 db_progetti.create_project(dati)
                 tkmb.showinfo("Successo", "Progetto creato.", parent=popup)
                 
-                self.aggiorna_lista_progetti()
+                self.aggiorna_lista_progetti() # Refresh list on main page
                 popup.destroy()
                 
             except ValueError as e:

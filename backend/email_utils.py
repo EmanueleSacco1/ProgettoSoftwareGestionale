@@ -19,8 +19,8 @@ def send_email(recipient_email, subject, body, smtp_config, attachment_path=None
         attachment_path (str, optional): The full local path to a file to attach.
 
     Returns:
-        tuple (bool, str): (True, "Success message") on success,
-                           (False, "Error message") on failure.
+        tuple (bool, str): (True, "Email sent successfully.") on success,
+                           (False, "Failed to send email: [error]") on failure.
     """
     # Check for minimum configuration
     if not smtp_config.get('host') or not smtp_config.get('user') or not smtp_config.get('password'):

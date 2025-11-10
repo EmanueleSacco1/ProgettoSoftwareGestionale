@@ -16,18 +16,18 @@ from . import address_book as db_rubrica
 from . import inventory as db_magazzino # Needed for stock updates
 
 # --- Constants ---
-PDF_EXPORT_DIR = "DOCUMENTI_PDF" # Will be created in the root folder
+PDF_EXPORT_DIR = "DOCUMENTI_PDF" # Directory for storing exported PDFs
 VALID_INVOICE_STATUS = ["In sospeso", "Pagato", "Scaduto", "Annullato"]
 VALID_QUOTE_STATUS = ["Bozza", "Inviato", "Accettato", "Rifiutato", "Fatturato"]
 
 # Setup Jinja2 environment to load the HTML template
 try:
-    # Load templates from the root directory (where frontend_gui.py is)
+    # Load templates from the root directory
     env = Environment(
         loader=FileSystemLoader('.'), 
         autoescape=select_autoescape(['html', 'xml'])
     )
-    # Add a custom filter to Jinja2 to replace newlines with <br> tags
+    # Add a custom filter to Jinja2 to replace newlines with <br> tags for HTML
     env.filters['nl2br'] = lambda s: str(s).replace('\n', '<br>\n')
 except Exception as e:
     print(f"CRITICAL ERROR: Could not initialize Jinja2 environment: {e}")
@@ -111,7 +111,7 @@ def _calculate_totals(items, discount_perc=Decimal('0'), vat_perc=Decimal('22'),
         Decimal('0.01'), rounding=ROUND_HALF_UP
     )
     
-    # This is the gross total of the document
+    # This is the gross total of the document (taxable + VAT)
     total = taxable_amount + vat_amount
     
     # Calculate withholding tax (Ritenuta) on the taxable amount
@@ -119,7 +119,7 @@ def _calculate_totals(items, discount_perc=Decimal('0'), vat_perc=Decimal('22'),
         Decimal('0.01'), rounding=ROUND_HALF_UP
     )
     
-    # This is the final net amount the client has to pay
+    # This is the final net amount the client has to pay (Gross - Withholding)
     total_da_pagare = total - ritenuta_amount
     
     return {
@@ -160,7 +160,7 @@ def create_quote(client_id, project_id, items, discount_perc, vat_perc, notes=""
         raise ValueError("Client ID not found.")
 
     try:
-        # Ritenuta is always 0 for quotes
+        # Ritenuta (withholding tax) is always 0 for quotes
         calculations = _calculate_totals(items, discount_perc, vat_perc, Decimal('0'))
     except InvalidOperation as e:
         raise ValueError(f"Invalid number in line items: {e}")
@@ -237,7 +237,8 @@ def create_invoice(client_id, project_id, items, discount_perc, vat_perc, ritenu
         item_id = item.get('articolo_id') or item.get('linked_item_id') 
         if item_id:
             try:
-                qta_to_remove = Decimal(str(item.get('qty', '0'))) * -1 # Make it negative
+                # Create a negative delta for the stock update
+                qta_to_remove = Decimal(str(item.get('qty', '0'))) * -1 
                 if qta_to_remove != 0:
                     success, msg = db_magazzino.update_stock(item_id, qta_to_remove)
                     if not success:
@@ -260,7 +261,7 @@ def create_invoice(client_id, project_id, items, discount_perc, vat_perc, ritenu
 def convert_quote_to_invoice(quote_id, due_date, ritenuta_perc):
     """
     Finds a quote and generates a new invoice from it.
-    This also updates warehouse stock.
+    This also updates warehouse stock via create_invoice.
 
     Args:
         quote_id (str): The 'id' of the quote to convert.
@@ -273,9 +274,9 @@ def convert_quote_to_invoice(quote_id, due_date, ritenuta_perc):
     """
     quote = find_document_by_id(quote_id)
     if not quote or quote['doc_type'] != 'quote':
-        return False, "Preventivo non trovato."
+        return False, "Quote not found."
     if quote['status'] == 'Fatturato':
-        return False, "Preventivo già fatturato."
+        return False, "Quote has already been invoiced."
 
     try:
         # Create the invoice. This will also handle stock reduction.
@@ -290,7 +291,8 @@ def convert_quote_to_invoice(quote_id, due_date, ritenuta_perc):
             notes=quote.get('notes', '')
         )
     except Exception as e:
-        return False, f"Errore creazione fattura: {e}"
+        # Catch errors from create_invoice (e.g., stock issues)
+        return False, f"Error creating invoice: {e}"
     
     # If invoice creation succeeds, update the quote status
     quote['status'] = 'Fatturato'
@@ -319,9 +321,9 @@ def update_document_status(doc_id, new_status):
         if doc['id'] == doc_id:
             # Validate status based on document type
             if doc['doc_type'] == 'invoice' and new_status not in VALID_INVOICE_STATUS:
-                raise ValueError(f"Stato fattura non valido: {new_status}")
+                raise ValueError(f"Invalid invoice status: {new_status}")
             if doc['doc_type'] == 'quote' and new_status not in VALID_QUOTE_STATUS:
-                raise ValueError(f"Stato preventivo non valido: {new_status}")
+                raise ValueError(f"Invalid quote status: {new_status}")
 
             documents[i]['status'] = new_status
             doc_found = True
@@ -331,12 +333,12 @@ def update_document_status(doc_id, new_status):
         db.save_data(db.DOCUMENTI_DB, documents)
         return True, documents[i]
     
-    return False, "Documento non trovato."
+    return False, "Document not found."
 
 def update_document(doc_id, updated_data):
     """
     Generic function to update a document (used internally by convert_quote).
-    This function is less safe than specific updaters.
+    This function is less safe as it merges all data.
 
     Args:
         doc_id (str): The 'id' of the document to update.
@@ -349,7 +351,7 @@ def update_document(doc_id, updated_data):
     doc_found = False
     for i, doc in enumerate(documents):
         if doc['id'] == doc_id:
-            doc.update(updated_data)
+            doc.update(updated_data) # Merge new data into existing doc
             documents[i] = doc
             doc_found = True
             break
@@ -363,7 +365,7 @@ def update_document(doc_id, updated_data):
 def export_to_pdf(doc_id):
     """
     Generates a PDF representation of the document using WeasyPrint
-    and an HTML template.
+    and an HTML template (invoice_template.html).
 
     Args:
         doc_id (str): The 'id' of the document to export.
@@ -374,14 +376,14 @@ def export_to_pdf(doc_id):
     """
     doc = find_document_by_id(doc_id)
     if not doc:
-        return False, "Documento non trovato."
+        return False, "Document not found."
 
     # Get client data
     client = db_rubrica.find_contact_by_id(doc['client_id'])
     if not client:
-        return False, "Cliente associato non trovato."
+        return False, "Associated client not found."
 
-    # Get my company details from settings
+    # Get 'my company' details from settings
     settings = db.load_settings()
     my_details_str = settings.get('my_company_details', "My Company\nMy Address")
     
@@ -395,14 +397,14 @@ def export_to_pdf(doc_id):
             'vat_id': my_details_parts[-1].replace("P.IVA: ", "")
         }
     except IndexError:
-        # Fallback if the format is wrong
+        # Fallback if the format in settings is wrong
         my_details_data = {
-            'name': 'Dati Azienda Non Configurati',
-            'address': 'Controlla i settings',
-            'vat_id': 'N/D'
+            'name': 'Company Data Not Configured',
+            'address': 'Please check settings',
+            'vat_id': 'N/A'
         }
 
-    # Setup PDF path
+    # Setup PDF path and filename
     os.makedirs(PDF_EXPORT_DIR, exist_ok=True)
     filename = f"{doc['number'].replace('/', '-')}_{doc['doc_type']}.pdf"
     filepath = os.path.join(PDF_EXPORT_DIR, filename)
@@ -411,7 +413,7 @@ def export_to_pdf(doc_id):
         # Load the HTML template file
         template = env.get_template('invoice_template.html')
         
-        # Add a display-friendly type to the doc
+        # Add a display-friendly type to the doc for the template
         doc['doc_type_display'] = "FATTURA" if doc['doc_type'] == 'invoice' else "PREVENTIVO"
         
         # Render the template with all the data
@@ -421,13 +423,13 @@ def export_to_pdf(doc_id):
             my_details=my_details_data
         )
         
-        # Use WeasyPrint to generate the PDF from the rendered HTML
+        # Use WeasyPrint to generate the PDF from the rendered HTML string
         HTML(string=html_out).write_pdf(filepath)
         
         return True, filepath
     
     except Exception as e:
-        return False, f"Errore generazione PDF: {e}"
+        return False, f"Error generating PDF: {e}"
 
 # --- Analysis: Statistics ---
 
@@ -446,7 +448,7 @@ def get_annual_stats(year):
     try:
         year = int(year)
     except ValueError:
-        return None, "Anno non valido."
+        return None, "Invalid year."
 
     invoices = get_all_documents(doc_type='invoice')
     
@@ -456,6 +458,7 @@ def get_annual_stats(year):
         if inv['status'] != 'Pagato':
             continue
         try:
+            # Check if the invoice *date* is in the target year
             invoice_year = datetime.strptime(inv['date'], '%Y-%m-%d').year
             if invoice_year == year:
                 paid_invoices.append(inv)
@@ -463,30 +466,30 @@ def get_annual_stats(year):
             continue
             
     if not paid_invoices:
-        return {'total_revenue': 0, 'top_clients': pd.DataFrame()}, "Nessuna fattura pagata trovata per l'anno."
+        return {'total_revenue': 0, 'top_clients': pd.DataFrame()}, "No paid invoices found for this year."
 
     # Use Pandas for easy aggregation
     df = pd.DataFrame(paid_invoices)
     
     # Convert Decimal to float for pandas operations
-    # Revenue is based on the net amount paid by the client
+    # Revenue is based on the net amount paid by the client ('total_da_pagare')
     df['total_numeric'] = df['total_da_pagare'].apply(lambda x: float(x))
     
     # 1. Total Revenue (based on 'total_da_pagare')
     total_revenue = df['total_numeric'].sum()
     
     # 2. Top Clients
-    # Create a map of client IDs to names
+    # Create a map of client IDs to names for readability
     client_names = {c['id']: c.get('name', 'N/A') for c in db_rubrica.get_all_contacts()}
     df['client_name'] = df['client_id'].map(client_names)
     
     # Group by client name and sum their paid totals
     top_clients = df.groupby('client_name')['total_numeric'].sum().sort_values(ascending=False).reset_index()
-    top_clients.columns = ['Cliente', 'Fatturato']
+    top_clients.columns = ['Cliente', 'Fatturato'] # Rename columns for display
     
     stats = {
         'total_revenue': total_revenue,
         'top_clients': top_clients
     }
     
-    return stats, "Statistiche generate."
+    return stats, "Statistics generated."

@@ -35,7 +35,7 @@ def _get_dates_for_quarter(year, quarter):
         start_date = datetime(year, 10, 1).date()
         end_date = datetime(year, 12, 31).date()
     else:
-        raise ValueError("Trimestre non valido. Usare 1-4.")
+        raise ValueError("Invalid quarter. Use 1-4.")
     return start_date, end_date
 
 def _get_dati_iva(start_date, end_date):
@@ -67,7 +67,7 @@ def _get_dati_iva(start_date, end_date):
     # 2. VAT Credit (from 'Uscita' entries in Prima Nota in the period)
     all_movimenti = db_ledger._get_movimenti()
     for mov in all_movimenti:
-        if mov.get('type') == 'Uscita':
+        if mov.get('type') == 'Uscita': # Only expenses
             try:
                 mov_date = datetime.strptime(mov['date'], '%Y-%m-%d').date()
                 if start_date <= mov_date <= end_date:
@@ -101,7 +101,7 @@ def _get_dati_contributivi(year, tax_config):
         inps_perc = Decimal(str(tax_config.get('inps_perc', '0'))) / 100
         irpef_perc = Decimal(str(tax_config.get('irpef_perc', '0'))) / 100
     except InvalidOperation:
-        raise ValueError("Aliquote fiscali non valide nei settings.")
+        raise ValueError("Invalid tax rates in settings.")
 
     # Load the financial ledger (Prima Nota) for the year
     df_movimenti, msg = db_ledger._get_dataframe(year)
@@ -169,9 +169,9 @@ def get_stima_completa(year, quarter):
         risultato.update(dati_iva)
         risultato.update(dati_contributivi)
         risultato['tax_config'] = tax_config
-        risultato['periodo'] = f"T{quarter} {year}"
+        risultato['periodo'] = f"Q{quarter} {year}"
         
-        return risultato, "Stima generata."
+        return risultato, "Estimate generated."
         
     except Exception as e:
-        return None, f"Errore during la generazione della stima: {e}"
+        return None, f"Error during estimate generation: {e}"

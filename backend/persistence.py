@@ -4,7 +4,7 @@ from datetime import datetime
 
 # --- Constants: File Paths ---
 # Define filenames for all data persistence files.
-# These will be created in the root folder (ProgettoSoftwareGestionale/)
+# These will be created in the root folder.
 RUBRICA_DB = 'rubrica.pkl'
 PROGETTI_DB = 'progetti.pkl'
 DOCUMENTI_DB = 'documenti.pkl'
@@ -24,14 +24,14 @@ def load_data(db_name):
 
     Returns:
         list: The loaded list of data, or an empty list if the file
-              doesn't exist or is empty.
+              doesn't exist or is empty/corrupt.
     """
     if os.path.exists(db_name):
         try:
             # Open in read-binary mode
             with open(db_name, 'rb') as f:
                 return pickle.load(f)
-        except EOFError:
+        except (EOFError, pickle.UnpicklingError):
             # File is empty or corrupt, return empty list
             return []
     return []
@@ -66,7 +66,7 @@ def load_settings():
         'last_quote_num': 0,
         'invoice_prefix': f"F{datetime.now().year}/",
         'quote_prefix': f"P{datetime.now().year}/",
-        'my_company_details': "Il Tuo Nome / La Tua Azienda\nVia, Città, CAP\nP.IVA: 0123456789",
+        'my_company_details': "Your Name / Your Company\nStreet, City, ZIP\nVAT ID: 0123456789",
         'smtp_config': {
             'host': '',
             'port': 587,
@@ -99,7 +99,7 @@ def load_settings():
                                     settings[key] = {}
                                 settings[key][sub_key] = sub_value
                 return settings
-        except EOFError:
+        except (EOFError, pickle.UnpicklingError):
             return defaults # Return defaults if file is corrupt
     return defaults
 
@@ -127,6 +127,7 @@ def get_next_document_number(doc_type="invoice"):
     Returns:
         str: The formatted, incremented document number (e.g., "F2025/001").
     """
+    # This is "atomic" because it loads, modifies, and saves in one operation
     settings = load_settings()
     
     current_year = datetime.now().year
